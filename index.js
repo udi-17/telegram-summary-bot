@@ -88,8 +88,8 @@ const mainMenuKeyboard = {
         keyboard: [
             [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
             [{ text: 'שבועי' }, { text: 'חודשי' }],
-            [{ text: 'אנשי קשר' }, { text: 'מלאי' }],
-            [{ text: 'התחלה' }]
+            [{ text: 'אנשי קשר' }, { text: 'התחלה' }],
+            [{ text: 'מלאי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
