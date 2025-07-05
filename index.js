@@ -4,13 +4,14 @@ const cron = require('node-cron');
 const chrono = require('chrono-node');
 
 // --- הגדרות ראשוניות ---
-const token = '7268100196:AAFYa_ejke6SRkhLRlF-HodxIyLW5xrk02E';
+const token = process.env.TELEGRAM_BOT_TOKEN || '7268100196:AAFYa_ejke6SRkhLRlF-HodxIyLW5xrk02E';
 const bot = new TelegramBot(token, { polling: true });
 
 // --- הגדרת מסד הנתונים ---
 const db = new sqlite3.Database('./data.db', (err) => {
   if (err) {
-    console.error(err.message);
+    console.error('Database connection error:', err.message);
+    process.exit(1);
   }
   console.log('Connected to the SQLite database.');
 
@@ -28,15 +29,29 @@ const initializeDatabaseAndStartServices = () => {
             amount REAL NOT NULL,
             destination TEXT,
             timestamp TEXT NOT NULL
-        )`);
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating transactions table:', err.message);
+            }
+        });
+        
         db.run(`CREATE TABLE IF NOT EXISTS contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE
-        )`);
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating contacts table:', err.message);
+            }
+        });
+        
         db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
             chat_id INTEGER PRIMARY KEY,
             type TEXT NOT NULL
-        )`);
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating subscriptions table:', err.message);
+            }
+        });
 
         // Add destination column for backwards compatibility - safe to run multiple times
         db.run('ALTER TABLE transactions ADD COLUMN destination TEXT', (err) => {
@@ -58,6 +73,20 @@ console.log('Bot has been started...');
 
 // --- מעקב אחר מצב המשתמש ---
 const userState = {};
+
+// פונקציה לניקוי מצבי משתמש ישנים (למניעת דליפת זיכרון)
+const cleanupUserStates = () => {
+    const now = Date.now();
+    Object.keys(userState).forEach(chatId => {
+        const state = userState[chatId];
+        if (state.timestamp && (now - state.timestamp) > 30 * 60 * 1000) { // 30 דקות
+            delete userState[chatId];
+        }
+    });
+};
+
+// ניקוי מצבי משתמש כל 10 דקות
+setInterval(cleanupUserStates, 10 * 60 * 1000);
 
 // --- הגדרת מקלדת ראשית ---
 const mainMenuKeyboard = {
@@ -117,8 +146,14 @@ bot.on('callback_query', (callbackQuery) => {
     const chatId = msg.chat.id;
     const data = callbackQuery.data;
 
+    // Answer callback query to stop loading spinner
+    bot.answerCallbackQuery(callbackQuery.id).catch(err => {
+        console.error('Error answering callback query:', err.message);
+    });
+
     if (data === 'cancel_action') {
-        bot.editMessageText("הפעולה בוטלה.", { chat_id: chatId, message_id: msg.message_id });
+        bot.editMessageText("הפעולה בוטלה.", { chat_id: chatId, message_id: msg.message_id })
+            .catch(err => console.error('Error editing message:', err.message));
         return;
     }
 
@@ -127,37 +162,69 @@ bot.on('callback_query', (callbackQuery) => {
 
         db.run(`DELETE FROM contacts WHERE name = ?`, [contactName], function(err) {
             if (err) {
-                bot.editMessageText("אירעה שגיאה במחיקת איש הקשר.", { chat_id: chatId, message_id: msg.message_id });
-                console.error(err.message);
+                bot.editMessageText("אירעה שגיאה במחיקת איש הקשר.", { chat_id: chatId, message_id: msg.message_id })
+                    .catch(e => console.error('Error editing message:', e.message));
+                console.error('Database error:', err.message);
                 return;
             }
-            if (this.changes > 0) {
-                bot.editMessageText(`'${contactName}' נמחק בהצלחה מספר הכתובות.`, { chat_id: chatId, message_id: msg.message_id });
-            } else {
-                bot.editMessageText(`'${contactName}' לא נמצא למחיקה.`, { chat_id: chatId, message_id: msg.message_id });
-            }
+            const message = this.changes > 0 ? 
+                `'${contactName}' נמחק בהצלחה מספר הכתובות.` :
+                `'${contactName}' לא נמצא למחיקה.`;
+            
+            bot.editMessageText(message, { chat_id: chatId, message_id: msg.message_id })
+                .catch(e => console.error('Error editing message:', e.message));
         });
         return;
     }
     
     if (data.startsWith('new_delivery_recipient:')) {
         const recipientName = data.substring('new_delivery_recipient:'.length);
-        bot.editMessageText(`נבחר: ${recipientName}.`, { chat_id: chatId, message_id: msg.message_id });
-        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום יעד");
+        bot.editMessageText(`נבחר: ${recipientName}.`, { chat_id: chatId, message_id: msg.message_id })
+            .catch(err => console.error('Error editing message:', err.message));
+        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום יעד")
+            .catch(err => console.error('Error sending message:', err.message));
         
         userState[chatId] = {
             action: 'awaiting_delivery_details',
-            recipient: recipientName
+            recipient: recipientName,
+            timestamp: Date.now()
         };
         return;
     }
 });
 
-// --- טיפול בשגיאות ---
+// --- טיפול בשגיאות בוט ---
 bot.on('polling_error', (error) => {
-  console.log(`Polling error: ${error.code} - ${error.message}`);
-  // כאן אפשר להוסיף לוגיקה לנסות להתחבר מחדש, וכו'
+    console.error(`Polling error: ${error.code} - ${error.message}`);
+    if (error.code === 'EFATAL') {
+        console.log('Fatal error detected, attempting to restart...');
+        // כאן אפשר להוסיף לוגיקה של restart
+    }
 });
+
+// טיפול בשגיאות לא מטופלות
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // נתן זמן לסיום פעולות לפני יציאה
+    setTimeout(() => {
+        process.exit(1);
+    }, 1000);
+});
+
+// --- פונקציות עזר ---
+const isValidNumber = (str) => {
+    const num = parseFloat(str);
+    return !isNaN(num) && isFinite(num) && num > 0;
+};
+
+const sanitizeInput = (input) => {
+    if (typeof input !== 'string') return '';
+    return input.trim().replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '');
+};
 
 // --- מאזין הודעות ונתב פקודות ראשי ---
 bot.on('message', (msg) => {
@@ -170,7 +237,12 @@ bot.on('message', (msg) => {
   }
   
   // ניקוי תווים בלתי נראים (בעיקר מהקלדה קולית) לפני עיבוד
-  const text = msg.text.replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '').trim();
+  const text = sanitizeInput(msg.text);
+  
+  if (!text) {
+    console.log(`Received empty message from chat ID ${chatId}. Ignoring.`);
+    return;
+  }
   
   console.log(`Received message from chat ID ${chatId}: "${text}"`);
   
@@ -181,7 +253,7 @@ bot.on('message', (msg) => {
     let amountIndex = -1;
     // Find the first valid number to be the amount
     for (let i = 0; i < parts.length; i++) {
-        if (!isNaN(parseFloat(parts[i])) && isFinite(parts[i])) {
+        if (isValidNumber(parts[i])) {
             amountIndex = i;
             break;
         }
@@ -196,18 +268,22 @@ bot.on('message', (msg) => {
         const recipient = state.recipient;
         const timestamp = new Date(); // Use current time for this flow
 
-        db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, [recipient, item, amount, destination, timestamp.toISOString()], function(err) {
+        db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
+            [recipient, item, amount, destination, timestamp.toISOString()], function(err) {
             if (err) {
-                bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard);
+                bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
                 delete userState[chatId];
-                return console.error(err.message);
+                return console.error('Database error:', err.message);
             }
             const dateStr = `${timestamp.getDate().toString().padStart(2, '0')}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}`;
-            bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard);
+            bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             delete userState[chatId];
         });
     } else {
-        bot.sendMessage(chatId, "הפורמט לא נכון. אנא שלח בפורמט: פריט סכום יעד (לדוגמה: אקמול 50 רעננה)", mainMenuKeyboard);
+        bot.sendMessage(chatId, "הפורמט לא נכון. אנא שלח בפורמט: פריט סכום יעד (לדוגמה: אקמול 50 רעננה)", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
     }
     return;
   }
@@ -243,23 +319,21 @@ bot.on('message', (msg) => {
       "אנשי קשר\nהוסף איש קשר [שם]\nמחק איש קשר\nשליחות חדשה\n\n" +
       "סיכומים אוטומטיים:\n" +
       "הרשמה\nביטול הרשמה";
-    bot.sendMessage(chatId, response, mainMenuKeyboard);
+    bot.sendMessage(chatId, response, mainMenuKeyboard)
+        .catch(err => console.error('Error sending message:', err.message));
 
   // --- ניתוב לתפריטי משנה ---
   } else if (command === 'יומי') {
-    // This now handles the direct command "יומי", not just the button.
-    // We check if a name is added.
     const parts = text.split(/\s+/);
     if (parts.length > 1) {
-        // This is a direct command like "יומי יוסי"
         const recipientName = parts.slice(1).join(' ');
         const today = new Date();
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
         const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
         generateSummary(chatId, 'יומי', startOfDay, endOfDay, recipientName);
     } else {
-        // Just the "יומי" button was pressed, show the daily menu.
-        bot.sendMessage(chatId, "בחר סיכום יומי:", dailyMenuKeyboard);
+        bot.sendMessage(chatId, "בחר סיכום יומי:", dailyMenuKeyboard)
+            .catch(err => console.error('Error sending message:', err.message));
     }
   } else if (command === 'שבועי') {
     const parts = text.split(/\s+/);
@@ -286,7 +360,8 @@ bot.on('message', (msg) => {
         }
         weekButtons.push([{ text: 'חזור' }]);
         const weeklySelectionKeyboard = { reply_markup: { keyboard: weekButtons, resize_keyboard: true, one_time_keyboard: true } };
-        bot.sendMessage(chatId, "בחר סיכום שבועי:", weeklySelectionKeyboard);
+        bot.sendMessage(chatId, "בחר סיכום שבועי:", weeklySelectionKeyboard)
+            .catch(err => console.error('Error sending message:', err.message));
     }
   } else if (command === 'חודשי') {
      const parts = text.split(/\s+/);
@@ -307,7 +382,8 @@ bot.on('message', (msg) => {
         }
         monthButtons.push([{ text: 'חזור' }]);
         const monthlySelectionKeyboard = { reply_markup: { keyboard: monthButtons, resize_keyboard: true, one_time_keyboard: true } };
-        bot.sendMessage(chatId, "בחר חודש לסיכום:", monthlySelectionKeyboard);
+        bot.sendMessage(chatId, "בחר חודש לסיכום:", monthlySelectionKeyboard)
+            .catch(err => console.error('Error sending message:', err.message));
      }
   } else if (command === 'היום') {
     const today = new Date();
@@ -329,7 +405,8 @@ bot.on('message', (msg) => {
     const endOfDay = new Date(dayBefore.getFullYear(), dayBefore.getMonth(), dayBefore.getDate(), 23, 59, 59);
     generateSummary(chatId, 'שלשום', startOfDay, endOfDay);
   } else if (command === 'בחירת תאריך...') {
-    bot.sendMessage(chatId, "כדי לקבל סיכום לתאריך מסוים, כתוב את הפקודה:\n`סיכום [התאריך]`\n\nלדוגמה: `סיכום אתמול בערב` או `סיכום 25/08/2024 יוסי`", { ...mainMenuKeyboard, parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, "כדי לקבל סיכום לתאריך מסוים, כתוב את הפקודה:\n`סיכום [התאריך]`\n\nלדוגמה: `סיכום אתמול בערב` או `סיכום 25/08/2024 יוסי`", { ...mainMenuKeyboard, parse_mode: 'Markdown' })
+        .catch(err => console.error('Error sending message:', err.message));
   
   } else if (command === '7 הימים האחרונים') {
     const today = new Date();
@@ -371,8 +448,6 @@ bot.on('message', (msg) => {
     generateSummary(chatId, 'החודש שעבר', startOfLastMonth, endOfLastMonth);
 
   } else if (command.startsWith('יומי ')) {
-      // This case is now handled by the logic inside the `יומי` block,
-      // but we keep it for backwards compatibility or other direct entries.
       const recipientName = command.substring('יומי '.length);
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
@@ -394,10 +469,18 @@ bot.on('message', (msg) => {
       generateSummary(chatId, 'חודשי', startOfMonth, endOfMonth, recipientName);
   } else if (command.startsWith('סיכום ')) {
     const content = command.substring('סיכום '.length).trim();
+    
+    if (!content) {
+        bot.sendMessage(chatId, "לא צוין תאריך. נסה: 'סיכום אתמול' או 'סיכום 25/07/2024'")
+            .catch(err => console.error('Error sending message:', err.message));
+        return;
+    }
+    
     const parsedResult = chrono.parse(content, new Date(), { forwardDate: false });
 
     if (!parsedResult || parsedResult.length === 0) {
-        bot.sendMessage(chatId, "לא הצלחתי להבין את התאריך מהפקודה. נסה פורמט אחר, למשל 'סיכום אתמול' או 'סיכום 25/07/2024'.");
+        bot.sendMessage(chatId, "לא הצלחתי להבין את התאריך מהפקודה. נסה פורמט אחר, למשל 'סיכום אתמול' או 'סיכום 25/07/2024'.")
+            .catch(err => console.error('Error sending message:', err.message));
         return;
     }
 
@@ -416,12 +499,12 @@ bot.on('message', (msg) => {
   } else if (command.startsWith('מצא ')) {
     const recipientName = command.substring('מצא '.length).trim();
     if (!recipientName) {
-        bot.sendMessage(chatId, "יש לציין שם לחיפוש. למשל: מצא ישראל ישראלי");
+        bot.sendMessage(chatId, "יש לציין שם לחיפוש. למשל: מצא ישראל ישראלי")
+            .catch(err => console.error('Error sending message:', err.message));
         return;
     }
     console.log(`Executing 'מצא' for '${recipientName}' from chat ID: ${chatId}`);
     
-    // Find all records from the beginning of time until now
     const farPast = new Date(0); 
     const now = new Date();
     
@@ -431,69 +514,99 @@ bot.on('message', (msg) => {
     console.log(`Executing 'אנשי קשר' for chat ID: ${chatId}`);
     db.all("SELECT name FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
             return;
         }
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק. ניתן להוסיף איש קשר עם הפקודה 'הוסף איש קשר [שם]', או פשוט לרשום שליחות והנמען יישמר אוטומטית.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "ספר הכתובות ריק. ניתן להוסיף איש קשר עם הפקודה 'הוסף איש קשר [שם]', או פשוט לרשום שליחות והנמען יישמר אוטומטית.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         const contactButtons = rows.map(row => [{ text: row.name }]);
         contactButtons.push([{ text: 'חזור' }]);
         const contactsKeyboard = { reply_markup: { keyboard: contactButtons, resize_keyboard: true, one_time_keyboard: true } };
-        bot.sendMessage(chatId, "בחר איש קשר לקבלת סיכום מלא:", contactsKeyboard);
+        bot.sendMessage(chatId, "בחר איש קשר לקבלת סיכום מלא:", contactsKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
     });
 
   } else if (command.startsWith('הוסף איש קשר ')) {
     const name = command.substring('הוסף איש קשר '.length).trim();
     if (!name) {
-        bot.sendMessage(chatId, "לא ציינת שם. נסה: הוסף איש קשר ישראל ישראלי", mainMenuKeyboard);
+        bot.sendMessage(chatId, "לא ציינת שם. נסה: הוסף איש קשר ישראל ישראלי", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
         return;
     }
+    
+    // וולידציה של השם
+    if (name.length < 2) {
+        bot.sendMessage(chatId, "השם קצר מדי. אנא הכנס שם תקין.", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        return;
+    }
+    
+    if (name.length > 100) {
+        bot.sendMessage(chatId, "השם ארוך מדי. אנא הכנס שם קצר יותר.", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        return;
+    }
+    
     console.log(`Executing 'הוסף איש קשר' for '${name}' from chat ID: ${chatId}`);
     db.run(`INSERT INTO contacts (name) VALUES (?)`, [name], function(err) {
         if (err) {
             if (err.code === 'SQLITE_CONSTRAINT') {
-                bot.sendMessage(chatId, `איש הקשר '${name}' כבר קיים.`, mainMenuKeyboard);
+                bot.sendMessage(chatId, `איש הקשר '${name}' כבר קיים.`, mainMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
             } else {
-                bot.sendMessage(chatId, "אירעה שגיאה בהוספת איש הקשר.", mainMenuKeyboard);
-                console.error(err.message);
+                bot.sendMessage(chatId, "אירעה שגיאה בהוספת איש הקשר.", mainMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+                console.error('Database error:', err.message);
             }
             return;
         }
-        bot.sendMessage(chatId, `איש הקשר '${name}' נוסף בהצלחה.`, mainMenuKeyboard);
+        bot.sendMessage(chatId, `איש הקשר '${name}' נוסף בהצלחה.`, mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
     });
-    
+
   } else if (command === 'מחק איש קשר') {
     console.log(`Executing 'מחק איש קשר' for chat ID: ${chatId}`);
     db.all("SELECT name FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
             return;
         }
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק, אין את מי למחוק.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "ספר הכתובות ריק, אין את מי למחוק.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.name}`, callback_data: `delete_contact:${row.name}` }]);
         inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
-        bot.sendMessage(chatId, "בחר איש קשר למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } });
+        bot.sendMessage(chatId, "בחר איש קשר למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+            .catch(e => console.error('Error sending message:', e.message));
     });
 
   } else if (command === 'שליחות חדשה') {
     console.log(`Executing 'שליחות חדשה' for chat ID: ${chatId}`);
     db.all("SELECT name FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
             return;
         }
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק. אנא הוסף איש קשר קודם עם הפקודה 'הוסף איש קשר [שם]', או בצע רישום רגיל והוא יתווסף אוטומטית.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "ספר הכתובות ריק. אנא הוסף איש קשר קודם עם הפקודה 'הוסף איש קשר [שם]', או בצע רישום רגיל והוא יתווסף אוטומטית.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         const inlineKeyboard = rows.map(row => ([{ text: row.name, callback_data: `new_delivery_recipient:${row.name}` }]));
         inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
-        bot.sendMessage(chatId, "למי השליחות? בחר מהרשימה:", { reply_markup: { inline_keyboard: inlineKeyboard } });
+        bot.sendMessage(chatId, "למי השליחות? בחר מהרשימה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+            .catch(e => console.error('Error sending message:', e.message));
     });
 
   } else if (command === 'הרשמה') {
@@ -501,14 +614,15 @@ bot.on('message', (msg) => {
     const query = "INSERT OR IGNORE INTO subscriptions (chat_id, type) VALUES (?, 'all')";
     db.run(query, [chatId], function(err) {
         if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה בתהליך ההרשמה.", mainMenuKeyboard);
-            return console.error(err.message);
+            bot.sendMessage(chatId, "אירעה שגיאה בתהליך ההרשמה.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return console.error('Database error:', err.message);
         }
-        if (this.changes > 0) {
-            bot.sendMessage(chatId, "נרשמת בהצלחה לקבלת סיכומים אוטומטיים (יומי, שבועי, חודשי).", mainMenuKeyboard);
-        } else {
-            bot.sendMessage(chatId, "אתה כבר רשום לקבלת עדכונים.", mainMenuKeyboard);
-        }
+        const message = this.changes > 0 ? 
+            "נרשמת בהצלחה לקבלת סיכומים אוטומטיים (יומי, שבועי, חודשי)." :
+            "אתה כבר רשום לקבלת עדכונים.";
+        bot.sendMessage(chatId, message, mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
     });
 
   } else if (command === 'ביטול הרשמה') {
@@ -516,39 +630,78 @@ bot.on('message', (msg) => {
     const query = "DELETE FROM subscriptions WHERE chat_id = ?";
     db.run(query, [chatId], function(err) {
         if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה בביטול ההרשמה.", mainMenuKeyboard);
-            return console.error(err.message);
+            bot.sendMessage(chatId, "אירעה שגיאה בביטול ההרשמה.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return console.error('Database error:', err.message);
         }
-        if (this.changes > 0) {
-            bot.sendMessage(chatId, "ההרשמה לקבלת סיכומים אוטומטיים בוטלה.", mainMenuKeyboard);
-        } else {
-            bot.sendMessage(chatId, "לא היית רשום לקבלת עדכונים.", mainMenuKeyboard);
-        }
+        const message = this.changes > 0 ? 
+            "ההרשמה לקבלת סיכומים אוטומטיים בוטלה." :
+            "לא היית רשום לקבלת עדכונים.";
+        bot.sendMessage(chatId, message, mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
     });
 
   } else if (command === 'בדיקה') {
     console.log(`Executing 'בדיקה' for chat ID: ${chatId}`);
-    const query = "SELECT id, recipient, item, amount, timestamp, destination FROM transactions ORDER BY id DESC";
+    const query = "SELECT id, recipient, item, amount, timestamp, destination FROM transactions ORDER BY id DESC LIMIT 50";
     db.all(query, [], (err, rows) => {
         if (err) {
             console.error("DB Error in 'בדיקה':", err.message);
-            bot.sendMessage(chatId, "שגיאה בשליפת הנתונים.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "שגיאה בשליפת הנתונים.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "מסד הנתונים ריק.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "מסד הנתונים ריק.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
-        let message = 'כל הרשומות במסד הנתונים:\n\n';
+        let message = 'כל הרשומות במסד הנתונים (50 האחרונות):\n\n';
         rows.forEach(row => {
             const dt = new Date(row.timestamp);
+            if (isNaN(dt.getTime())) {
+                message += `#${row.id}: [תאריך שגוי] - ${row.recipient}, ${row.item}, ${row.amount}₪\n`;
+                return;
+            }
             const dateStr = `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear()}`;
             const timeStr = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
 
             let dest = row.destination ? `, יעד: ${row.destination}` : '';
-            message += `#${row.id}: ${dateStr} ${timeStr} - ${row.recipient}, ${row.item}, ${row.amount}${dest}\n`;
+            message += `#${row.id}: ${dateStr} ${timeStr} - ${row.recipient}, ${row.item}, ${row.amount}₪${dest}\n`;
         });
-        bot.sendMessage(chatId, message, mainMenuKeyboard);
+        
+        // חלוקת הודעות ארוכות
+        const maxLength = 4000;
+        if (message.length > maxLength) {
+            const parts = [];
+            let currentPart = '';
+            const lines = message.split('\n');
+            
+            for (const line of lines) {
+                if (currentPart.length + line.length > maxLength) {
+                    parts.push(currentPart);
+                    currentPart = line + '\n';
+                } else {
+                    currentPart += line + '\n';
+                }
+            }
+            if (currentPart) parts.push(currentPart);
+            
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    const options = { parse_mode: 'Markdown' };
+                    if (index === parts.length - 1) {
+                        options.reply_markup = mainMenuKeyboard.reply_markup;
+                    }
+                    bot.sendMessage(chatId, part, options)
+                        .catch(e => console.error('Error sending message:', e.message));
+                }, index * 100);
+            });
+        } else {
+            const summaryOptions = { ...mainMenuKeyboard, parse_mode: 'Markdown' };
+            bot.sendMessage(chatId, message, summaryOptions)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
     });
   
   } else {
@@ -592,7 +745,8 @@ bot.on('message', (msg) => {
     db.all("SELECT name FROM contacts ORDER BY LENGTH(name) DESC", [], (err, contacts) => {
         if (err) {
             console.error("Error fetching contacts for free-text parsing:", err.message);
-            bot.sendMessage(chatId, "אירעה שגיאה, נסה שוב.", mainMenuKeyboard);
+            bot.sendMessage(chatId, "אירעה שגיאה, נסה שוב.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         
@@ -610,7 +764,7 @@ bot.on('message', (msg) => {
         for (const contact of contacts) {
             if (text.startsWith(contact.name)) {
                 matchedContact = contact;
-                break; // Found the longest possible match
+                break;
             }
         }
 
@@ -621,14 +775,13 @@ bot.on('message', (msg) => {
 
             let amountIndex = -1;
             for (let i = 0; i < parts.length; i++) {
-                // Ensure it's a number and not part of a date like 19:00
-                if (!isNaN(parseFloat(parts[i])) && isFinite(parts[i])) {
+                if (isValidNumber(parts[i])) {
                     amountIndex = i;
                     break;
                 }
             }
 
-            if (amountIndex !== -1 && amountIndex > 0) { // Must have an item before the amount
+            if (amountIndex !== -1 && amountIndex > 0) {
                 const item = parts.slice(0, amountIndex).join(' ');
                 const amount = parseFloat(parts[amountIndex]);
                 const destinationAndDate = parts.slice(amountIndex + 1).join(' ');
@@ -640,16 +793,13 @@ bot.on('message', (msg) => {
 
                 if (parsedDate) {
                     timestamp = parsedDate;
-                    // This is tricky: we assume the date is at the end. How to find the destination?
-                    // We find what chrono parsed, and remove it from the string.
                     const parsedInfo = chrono.parse(destinationAndDate, new Date(), { forwardDate: false });
                     if (parsedInfo.length > 0) {
-                        // To be safe, we remove the parsed text from the end of the string
                         const dateText = parsedInfo[0].text;
                         if (destinationAndDate.endsWith(dateText)) {
                             destination = destinationAndDate.substring(0, destinationAndDate.length - dateText.length).trim();
                         } else {
-                             destination = destinationAndDate; // fallback
+                             destination = destinationAndDate;
                         }
                     } else {
                        destination = destinationAndDate;
@@ -660,27 +810,37 @@ bot.on('message', (msg) => {
                 }
                 
                 if (!destination) {
-                     bot.sendMessage(chatId, `לא זוהה יעד עבור ${item}. נסה שוב.`, mainMenuKeyboard);
+                     bot.sendMessage(chatId, `לא זוהה יעד עבור ${item}. נסה שוב.`, mainMenuKeyboard)
+                        .catch(e => console.error('Error sending message:', e.message));
                      return;
                 }
+
+                // הוספת הקשר למסד הנתונים אם אינו קיים
+                db.run(`INSERT OR IGNORE INTO contacts (name) VALUES (?)`, [recipient], (err) => {
+                    if (err) {
+                        console.error('Error auto-adding contact:', err.message);
+                    }
+                });
 
                 db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
                     [recipient, item, amount, destination, timestamp.toISOString()], function(err) {
                     if (err) {
-                        bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard);
-                        return console.error(err.message);
+                        bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard)
+                            .catch(e => console.error('Error sending message:', e.message));
+                        return console.error('Database error:', err.message);
                     }
                     const dateStr = `${timestamp.getDate().toString().padStart(2, '0')}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}`;
-                    bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard);
+                    bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard)
+                        .catch(e => console.error('Error sending message:', e.message));
                 });
 
             } else {
-                // This might be a message not intended as a command, so we can ignore it.
-                // Or send a help message if it looks like a failed command.
-                 bot.sendMessage(chatId, "לא הבנתי את הפקודה. אם ניסית לרשום שליחות, ודא שהיא בפורמט: שם פריט סכום יעד", mainMenuKeyboard);
+                bot.sendMessage(chatId, "לא הבנתי את הפקודה. אם ניסית לרשום שליחות, ודא שהיא בפורמט: שם פריט סכום יעד", mainMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
             }
         } else {
-             bot.sendMessage(chatId, "לא הבנתי. כדי להתחיל, נסה 'התחלה' או 'שליחות חדשה'.", mainMenuKeyboard);
+             bot.sendMessage(chatId, "לא הבנתי. כדי להתחיל, נסה 'התחלה' או 'שליחות חדשה'.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
         }
     });
   }
@@ -693,16 +853,16 @@ const sendSummary = (chatId, period) => {
     
     switch (period) {
         case 'daily':
-            endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, -1); // End of yesterday
+            endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, -1);
             startDate = new Date(endDate);
-            startDate.setDate(endDate.getDate()); // Start of yesterday
+            startDate.setDate(endDate.getDate());
             startDate.setHours(0,0,0,0);
             generateSummary(chatId, 'יומי (אתמול)', startDate, endDate);
             break;
         case 'weekly':
-            endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, -1); // End of yesterday
+            endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, -1);
             startDate = new Date(endDate);
-            startDate.setDate(endDate.getDate() - 6); // 7 days including start date
+            startDate.setDate(endDate.getDate() - 6);
             startDate.setHours(0,0,0,0);
             generateSummary(chatId, 'שבועי אחרון', startDate, endDate);
             break;
@@ -711,42 +871,84 @@ const sendSummary = (chatId, period) => {
             endDate = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
             generateSummary(chatId, 'חודשי (חודש קודם)', startDate, endDate);
             break;
+        default:
+            console.error('Unknown period:', period);
+            return;
     }
 };
 
 const scheduleTasks = () => {
+    console.log('Setting up scheduled tasks...');
+    
+    // קבלת מנויים פעם אחת בהתחלה
     db.all("SELECT chat_id FROM subscriptions", [], (err, rows) => {
         if (err) {
-            console.error("Failed to get subscribers", err);
+            console.error("Failed to get subscribers:", err.message);
             return;
         }
-        const subscribers = rows.map(r => r.chat_id);
-
-        // Daily summary at 00:00 for the previous day
-        cron.schedule('0 0 * * *', () => {
-            console.log('Running daily summary cron job...');
-            subscribers.forEach(chatId => sendSummary(chatId, 'daily'));
-        });
-
-        // Weekly summary at 00:00 on Monday for the past week
-        cron.schedule('0 0 * * 1', () => {
-             console.log('Running weekly summary cron job...');
-            subscribers.forEach(chatId => sendSummary(chatId, 'weekly'));
-        });
-
-        // Monthly summary at 00:00 on the 1st of the month
-        cron.schedule('0 0 1 * *', () => {
-            console.log('Running monthly summary cron job...');
-            subscribers.forEach(chatId => sendSummary(chatId, 'monthly'));
-        });
         
-        console.log(`Scheduled tasks for ${subscribers.length} subscribers.`);
+        const subscribers = rows.map(r => r.chat_id);
+        console.log(`Found ${subscribers.length} subscribers for scheduled tasks.`);
+
+        // רק אם יש מנויים, נגדיר את המשימות
+        if (subscribers.length > 0) {
+            // Daily summary at 00:00 for the previous day
+            cron.schedule('0 0 * * *', () => {
+                console.log('Running daily summary cron job...');
+                subscribers.forEach(chatId => {
+                    try {
+                        sendSummary(chatId, 'daily');
+                    } catch (error) {
+                        console.error(`Error sending daily summary to ${chatId}:`, error.message);
+                    }
+                });
+            });
+
+            // Weekly summary at 00:00 on Monday for the past week
+            cron.schedule('0 0 * * 1', () => {
+                console.log('Running weekly summary cron job...');
+                subscribers.forEach(chatId => {
+                    try {
+                        sendSummary(chatId, 'weekly');
+                    } catch (error) {
+                        console.error(`Error sending weekly summary to ${chatId}:`, error.message);
+                    }
+                });
+            });
+
+            // Monthly summary at 00:00 on the 1st of the month
+            cron.schedule('0 0 1 * *', () => {
+                console.log('Running monthly summary cron job...');
+                subscribers.forEach(chatId => {
+                    try {
+                        sendSummary(chatId, 'monthly');
+                    } catch (error) {
+                        console.error(`Error sending monthly summary to ${chatId}:`, error.message);
+                    }
+                });
+            });
+        }
+        
+        console.log(`Scheduled tasks configured for ${subscribers.length} subscribers.`);
     });
 };
 
 console.log("Script execution finished. Bot is now polling for messages."); 
 
 function generateSummary(chatId, period, startDate, endDate, recipientName = null) {
+    // וולידציה של פרמטרים
+    if (!chatId || !startDate || !endDate) {
+        console.error('Invalid parameters for generateSummary');
+        return;
+    }
+    
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        console.error('Invalid date parameters for generateSummary');
+        bot.sendMessage(chatId, "שגיאה בחישוב התאריכים.", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        return;
+    }
+    
     let query = `SELECT id, recipient, item, amount, destination, timestamp FROM transactions WHERE timestamp >= ? AND timestamp <= ?`;
     const params = [startDate.toISOString(), endDate.toISOString()];
 
@@ -758,8 +960,9 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
 
     db.all(query, params, (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה בקבלת הנתונים.", mainMenuKeyboard);
-            return console.error(err.message);
+            bot.sendMessage(chatId, "אירעה שגיאה בקבלת הנתונים.", mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return console.error('Database error:', err.message);
         }
 
         let totalAmount = 0;
@@ -775,18 +978,80 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
                 if (isNaN(date.getTime())) {
                     console.log(`[WARNING] Invalid date for transaction ID ${row.id}: "${row.timestamp}"`);
                     summaryText += `▫️ [תאריך שגוי] ${row.recipient}: ${row.item}, ${row.amount}₪\n`;
-                    return; // Skip this row
+                    return;
                 }
 
                 const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
                 const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                // Using a more spaced-out and clear format
                 summaryText += `👤 *${row.recipient}* | 📦 ${row.item} | 💰 ${row.amount}₪ | 📍 ${row.destination || 'לא צוין'} | 📅 ${dateStr} ${timeStr}\n`;
             });
             summaryText += `\n*סה"כ: ${rows.length} שליחויות בסכום כולל של ${totalAmount.toFixed(2)}₪*`;
         }
         
-        const summaryOptions = { ...mainMenuKeyboard, parse_mode: 'Markdown' };
-        bot.sendMessage(chatId, summaryText, summaryOptions);
+        // חלוקת הודעות ארוכות
+        const maxLength = 4000;
+        if (summaryText.length > maxLength) {
+            const parts = [];
+            let currentPart = '';
+            const lines = summaryText.split('\n');
+            
+            for (const line of lines) {
+                if (currentPart.length + line.length > maxLength) {
+                    parts.push(currentPart);
+                    currentPart = line + '\n';
+                } else {
+                    currentPart += line + '\n';
+                }
+            }
+            if (currentPart) parts.push(currentPart);
+            
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    const options = { parse_mode: 'Markdown' };
+                    if (index === parts.length - 1) {
+                        options.reply_markup = mainMenuKeyboard.reply_markup;
+                    }
+                    bot.sendMessage(chatId, part, options)
+                        .catch(e => console.error('Error sending message:', e.message));
+                }, index * 100);
+            });
+        } else {
+            const summaryOptions = { ...mainMenuKeyboard, parse_mode: 'Markdown' };
+            bot.sendMessage(chatId, summaryText, summaryOptions)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
     });
-} 
+}
+
+// --- סיום תקין של התוכנית ---
+process.on('SIGINT', () => {
+    console.log('Received SIGINT, shutting down gracefully...');
+    if (db) {
+        db.close((err) => {
+            if (err) {
+                console.error('Error closing database:', err.message);
+            } else {
+                console.log('Database connection closed.');
+            }
+            process.exit(0);
+        });
+    } else {
+        process.exit(0);
+    }
+});
+
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM, shutting down gracefully...');
+    if (db) {
+        db.close((err) => {
+            if (err) {
+                console.error('Error closing database:', err.message);
+            } else {
+                console.log('Database connection closed.');
+            }
+            process.exit(0);
+        });
+    } else {
+        process.exit(0);
+    }
+}); 
