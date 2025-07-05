@@ -1273,9 +1273,11 @@ bot.on('message', (msg) => {
   
   // --- נתב פקודות ראשי ---
   let command = text.toLowerCase().trim();
+  console.log(`Received command: '${command}' from chat ID: ${chatId}`);
 
   // נטפל בכפתור "חזור" על ידי המרתו לפקודת "התחלה"
   if (command === 'חזור' || command === 'חזור לתפריט הראשי') {
+      console.log(`Converting '${command}' to 'התחלה' for chat ID: ${chatId}`);
       command = 'התחלה';
   }
 
@@ -1498,6 +1500,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'שליח') {
     console.log(`Executing 'שליח' for chat ID: ${chatId}`);
+    console.log(`Sending contacts menu to chat ID: ${chatId}`);
     bot.sendMessage(chatId, "בחר פעולה לניהול השליחים:", contactsMenuKeyboard)
         .catch(err => console.error('Error sending message:', err.message));
 
