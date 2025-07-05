@@ -345,11 +345,11 @@ bot.on('callback_query', (callbackQuery) => {
             return;
         }
         
-        const data = state.extractedData;
+                const extractedData = state.extractedData;
         const timestamp = new Date();
         
         // הוספת הלקוח לרשימת אנשי הקשר אם לא קיים
-        db.run(`INSERT OR IGNORE INTO contacts (name) VALUES (?)`, [data.customerName], (err) => {
+        db.run(`INSERT OR IGNORE INTO contacts (name) VALUES (?)`, [extractedData.customerName], (err) => {
             if (err) {
                 console.error('Error auto-adding contact:', err.message);
             }
@@ -357,7 +357,7 @@ bot.on('callback_query', (callbackQuery) => {
         
         // שמירת השליחות
         db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
-            [data.customerName, data.product, data.price, data.address || '', data.phone || '', timestamp.toISOString()], 
+            [extractedData.customerName, extractedData.product, extractedData.price, extractedData.address || '', extractedData.phone || '', timestamp.toISOString()], 
             function(err) {
                 if (err) {
                     bot.editMessageText("אירעה שגיאה בשמירת הנתונים.", { chat_id: chatId, message_id: msg.message_id })
@@ -383,11 +383,11 @@ bot.on('callback_query', (callbackQuery) => {
                 
                 let message = `✅ שליחות נרשמה בהצלחה מחילוץ חכם!\n\n`;
                 message += `📝 מספר רישום: #${this.lastID}\n`;
-                message += `👤 נמען: ${data.customerName}\n`;
-                message += `🛍️ מוצר: ${data.product}\n`;
-                message += `💰 סכום: ${data.price}₪\n`;
-                message += `🏠 כתובת: ${data.address || 'לא צוין'}\n`;
-                message += `📞 טלפון: ${data.phone || 'לא צוין'}\n`;
+                message += `👤 נמען: ${extractedData.customerName}\n`;
+                message += `🛍️ מוצר: ${extractedData.product}\n`;
+                message += `💰 סכום: ${extractedData.price}₪\n`;
+                message += `🏠 כתובת: ${extractedData.address || 'לא צוין'}\n`;
+                message += `📞 טלפון: ${extractedData.phone || 'לא צוין'}\n`;
                 message += `📅 תאריך: ${dateStr}\n`;
                 message += `🕐 שעה: ${timeStr}`;
                 
@@ -395,7 +395,7 @@ bot.on('callback_query', (callbackQuery) => {
                     .catch(e => console.error('Error editing message:', e.message));
                 
                 delete userState[extractionChatId];
-                         });
+             });
          return;
      }
 
@@ -491,13 +491,13 @@ bot.on('callback_query', (callbackQuery) => {
          }
          
          // חזרה להצגת הנתונים לאישור
-         const data = state.extractedData;
+         const extractedData = state.extractedData;
          let confirmationMessage = `🔍 הנתונים שחולצו מההודעה:\n\n`;
-         confirmationMessage += `👤 לקוח: ${data.customerName || 'לא נמצא'}\n`;
-         confirmationMessage += `🛍️ מוצר: ${data.product || 'לא נמצא'}\n`;
-         confirmationMessage += `💰 מחיר: ${data.price ? data.price + '₪' : 'לא נמצא'}\n`;
-         confirmationMessage += `🏠 כתובת: ${data.address || 'לא נמצא'}\n`;
-         confirmationMessage += `📞 טלפון: ${data.phone || 'לא נמצא'}\n\n`;
+         confirmationMessage += `👤 לקוח: ${extractedData.customerName || 'לא נמצא'}\n`;
+         confirmationMessage += `🛍️ מוצר: ${extractedData.product || 'לא נמצא'}\n`;
+         confirmationMessage += `💰 מחיר: ${extractedData.price ? extractedData.price + '₪' : 'לא נמצא'}\n`;
+         confirmationMessage += `🏠 כתובת: ${extractedData.address || 'לא נמצא'}\n`;
+         confirmationMessage += `📞 טלפון: ${extractedData.phone || 'לא נמצא'}\n\n`;
          confirmationMessage += `✅ האם הנתונים נכונים?`;
          
          bot.editMessageText(confirmationMessage, { 
@@ -2333,16 +2333,16 @@ function handleFieldEdit(chatId, text, state) {
             'phone': 'טלפון'
         };
         
-        // עדכון ההודעה עם הנתונים החדשים
-        const data = state.extractedData;
-        let confirmationMessage = `✅ ${fieldNames[fieldName]} עודכן בהצלחה!\n\n`;
-        confirmationMessage += `🔍 הנתונים המעודכנים:\n\n`;
-        confirmationMessage += `👤 לקוח: ${data.customerName || 'לא נמצא'}\n`;
-        confirmationMessage += `🛍️ מוצר: ${data.product || 'לא נמצא'}\n`;
-        confirmationMessage += `💰 מחיר: ${data.price ? data.price + '₪' : 'לא נמצא'}\n`;
-        confirmationMessage += `🏠 כתובת: ${data.address || 'לא נמצא'}\n`;
-        confirmationMessage += `📞 טלפון: ${data.phone || 'לא נמצא'}\n\n`;
-        confirmationMessage += `✅ האם הנתונים נכונים?`;
+                 // עדכון ההודעה עם הנתונים החדשים
+         const extractedData = state.extractedData;
+         let confirmationMessage = `✅ ${fieldNames[fieldName]} עודכן בהצלחה!\n\n`;
+         confirmationMessage += `🔍 הנתונים המעודכנים:\n\n`;
+         confirmationMessage += `👤 לקוח: ${extractedData.customerName || 'לא נמצא'}\n`;
+         confirmationMessage += `🛍️ מוצר: ${extractedData.product || 'לא נמצא'}\n`;
+         confirmationMessage += `💰 מחיר: ${extractedData.price ? extractedData.price + '₪' : 'לא נמצא'}\n`;
+         confirmationMessage += `🏠 כתובת: ${extractedData.address || 'לא נמצא'}\n`;
+         confirmationMessage += `📞 טלפון: ${extractedData.phone || 'לא נמצא'}\n\n`;
+         confirmationMessage += `✅ האם הנתונים נכונים?`;
         
         const confirmationKeyboard = {
             reply_markup: {
