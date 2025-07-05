@@ -132,7 +132,7 @@ const mainMenuKeyboard = {
         keyboard: [
             [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
             [{ text: 'שבועי' }, { text: 'חודשי' }],
-            [{ text: 'אנשי קשר' }, { text: 'לקוחות' }],
+            [{ text: 'שליח' }, { text: 'לקוחות' }],
             [{ text: 'ניהול מלאי' }, { text: 'התחלה' }]
         ],
         resize_keyboard: true,
@@ -193,14 +193,14 @@ const inventoryMenuKeyboard = {
     }
 };
 
-// --- תפריט ניהול אנשי קשר ---
+// --- תפריט ניהול שליחים ---
 const contactsMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: 'הוסף איש קשר חדש' }, { text: 'הצג אנשי קשר' }],
-            [{ text: 'חפש איש קשר' }, { text: 'מחק איש קשר' }],
-            [{ text: 'ייבא אנשי קשר' }, { text: 'ייצא אנשי קשר' }],
-            [{ text: 'שליחות לאיש קשר חדש' }],
+            [{ text: 'הוסף שליח חדש' }, { text: 'הצג שליחים' }],
+            [{ text: 'חפש שליח' }, { text: 'מחק שליח' }],
+            [{ text: 'ייבא שליחים' }, { text: 'ייצא שליחים' }],
+            [{ text: 'שליחות לשליח חדש' }],
             [{ text: 'חזור' }]
         ],
         resize_keyboard: true,
@@ -554,8 +554,8 @@ bot.on('message', (msg) => {
       "חודשי [שם] - סיכום חודשי לאדם\n" +
       "מצא [שם] - כל הרשומות עבור אדם\n" +
       "סיכום [תאריך] [שם] - סיכום ליום ספציפי (אפשר גם בלי שם)\n\n" +
-      "ניהול אנשי קשר:\n" +
-      "אנשי קשר\nהוסף איש קשר [שם]\nמחק איש קשר\nשליחות חדשה\n\n" +
+      "ניהול שליחים:\n" +
+      "שליח\nהוסף שליח [שם]\nמחק שליח\nשליחות חדשה\n\n" +
       "ניהול מלאי:\n" +
       "ניהול מלאי - תפריט ניהול המלאי\n" +
       "הוסף פריט למלאי\nהצג מלאי\nעדכן כמות\nחפש במלאי\nדו״ח מלאי\n\n" +
@@ -752,9 +752,9 @@ bot.on('message', (msg) => {
     
     generateSummary(chatId, `כללי`, farPast, now, recipientName);
 
-  } else if (command === 'אנשי קשר') {
-    console.log(`Executing 'אנשי קשר' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "בחר פעולה לניהול אנשי הקשר:", contactsMenuKeyboard)
+  } else if (command === 'שליח') {
+    console.log(`Executing 'שליח' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "בחר פעולה לניהול השליחים:", contactsMenuKeyboard)
         .catch(err => console.error('Error sending message:', err.message));
 
   } else if (command === 'לקוחות') {
@@ -762,9 +762,9 @@ bot.on('message', (msg) => {
     bot.sendMessage(chatId, "בחר פעולה לניהול הלקוחות:", customersMenuKeyboard)
         .catch(err => console.error('Error sending message:', err.message));
 
-  } else if (command === 'הוסף איש קשר חדש') {
-    console.log(`Executing 'הוסף איש קשר חדש' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם איש הקשר החדש:\n\nדוגמה: ישראל ישראלי")
+  } else if (command === 'הוסף שליח חדש') {
+    console.log(`Executing 'הוסף שליח חדש' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם השליח החדש:\n\nדוגמה: ישראל ישראלי")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -772,13 +772,13 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command === 'הצג אנשי קשר') {
-    console.log(`Executing 'הצג אנשי קשר' for chat ID: ${chatId}`);
+  } else if (command === 'הצג שליחים') {
+    console.log(`Executing 'הצג שליחים' for chat ID: ${chatId}`);
     displayAllContacts(chatId);
 
-  } else if (command === 'חפש איש קשר') {
-    console.log(`Executing 'חפש איש קשר' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם או חלק משם איש הקשר לחיפוש:")
+  } else if (command === 'חפש שליח') {
+    console.log(`Executing 'חפש שליח' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם או חלק משם השליח לחיפוש:")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -786,9 +786,9 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command === 'ייבא אנשי קשר') {
-    console.log(`Executing 'ייבא אנשי קשר' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח רשימת אנשי קשר (שם אחד בכל שורה):\n\nדוגמה:\nישראל ישראלי\nמשה כהן\nדנה לוי")
+  } else if (command === 'ייבא שליחים') {
+    console.log(`Executing 'ייבא שליחים' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח רשימת שליחים (שם אחד בכל שורה):\n\nדוגמה:\nישראל ישראלי\nמשה כהן\nדנה לוי")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -796,17 +796,17 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command === 'ייצא אנשי קשר') {
-    console.log(`Executing 'ייצא אנשי קשר' for chat ID: ${chatId}`);
+  } else if (command === 'ייצא שליחים') {
+    console.log(`Executing 'ייצא שליחים' for chat ID: ${chatId}`);
     exportContacts(chatId);
 
-  } else if (command === 'מחק איש קשר') {
-    console.log(`Executing 'מחק איש קשר' for chat ID: ${chatId}`);
+  } else if (command === 'מחק שליח') {
+    console.log(`Executing 'מחק שליח' for chat ID: ${chatId}`);
     showContactsForDeletion(chatId);
 
-  } else if (command === 'שליחות לאיש קשר חדש') {
-    console.log(`Executing 'שליחות לאיש קשר חדש' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח את שם איש הקשר החדש ופרטי השליחות בפורמט:\n\nשם איש הקשר פריט סכום יעד\n\nדוגמה: דוד כהן שולחן 500 תל אביב")
+  } else if (command === 'שליחות לשליח חדש') {
+    console.log(`Executing 'שליחות לשליח חדש' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח את שם השליח החדש ופרטי השליחות בפורמט:\n\nשם השליח פריט סכום יעד\n\nדוגמה: דוד כהן שולחן 500 תל אביב")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -814,10 +814,10 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command.startsWith('הוסף איש קשר ')) {
-    const name = command.substring('הוסף איש קשר '.length).trim();
+  } else if (command.startsWith('הוסף שליח ')) {
+    const name = command.substring('הוסף שליח '.length).trim();
     if (!name) {
-        bot.sendMessage(chatId, "לא ציינת שם. נסה: הוסף איש קשר ישראל ישראלי", mainMenuKeyboard)
+        bot.sendMessage(chatId, "לא ציינת שם. נסה: הוסף שליח ישראל ישראלי", mainMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         return;
     }
@@ -835,20 +835,20 @@ bot.on('message', (msg) => {
         return;
     }
     
-    console.log(`Executing 'הוסף איש קשר' for '${name}' from chat ID: ${chatId}`);
+    console.log(`Executing 'הוסף שליח' for '${name}' from chat ID: ${chatId}`);
     db.run(`INSERT INTO contacts (name) VALUES (?)`, [name], function(err) {
         if (err) {
             if (err.code === 'SQLITE_CONSTRAINT') {
-                bot.sendMessage(chatId, `איש הקשר '${name}' כבר קיים.`, mainMenuKeyboard)
+                bot.sendMessage(chatId, `השליח '${name}' כבר קיים.`, mainMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
             } else {
-                bot.sendMessage(chatId, "אירעה שגיאה בהוספת איש הקשר.", mainMenuKeyboard)
+                bot.sendMessage(chatId, "אירעה שגיאה בהוספת השליח.", mainMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
                 console.error('Database error:', err.message);
             }
             return;
         }
-        bot.sendMessage(chatId, `איש הקשר '${name}' נוסף בהצלחה.`, mainMenuKeyboard)
+        bot.sendMessage(chatId, `השליח '${name}' נוסף בהצלחה.`, mainMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
     });
 
@@ -964,7 +964,7 @@ bot.on('message', (msg) => {
             return;
         }
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק. אנא הוסף איש קשר קודם עם הפקודה 'הוסף איש קשר [שם]', או בצע רישום רגיל והוא יתווסף אוטומטית.", mainMenuKeyboard)
+            bot.sendMessage(chatId, "ספר הכתובות ריק. אנא הוסף שליח קודם עם הפקודה 'הוסף שליח [שם]', או בצע רישום רגיל והוא יתווסף אוטומטית.", mainMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             return;
         }
