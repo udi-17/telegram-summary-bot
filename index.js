@@ -1794,6 +1794,16 @@ bot.on('message', (msg) => {
         }
     });
   
+  // --- טיפול בכפתורי תפריטי המשנה ---
+  } else if (command === 'הוסף שליח חדש' || command === 'הצג שליחים' || command === 'מחק שליח' || command === 'שליחות לשליח חדש') {
+    // אלה כבר מטופלים למעלה, אבל נוודא שהם לא יעברו ל-CATCH-ALL
+    return;
+  } else if (command === 'הוסף לקוח חדש' || command === 'חפש לקוח' || command === 'מחק לקוח' || command === 'עדכן פרטי לקוח' || command === 'שליחות ללקוח') {
+    // אלה כבר מטופלים למעלה, אבל נוודא שהם לא יעברו ל-CATCH-ALL
+    return;
+  } else if (command === 'הוסף פריט למלאי' || command === 'עדכן כמות' || command === 'מחק פריט' || command === 'חפש במלאי') {
+    // אלה כבר מטופלים למעלה, אבל נוודא שהם לא יעברו ל-CATCH-ALL
+    return;
   } else {
     // --- CATCH-ALL for dynamic buttons and free-text entry ---
 
