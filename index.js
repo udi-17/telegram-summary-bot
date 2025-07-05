@@ -399,7 +399,7 @@ bot.on('callback_query', (callbackQuery) => {
             }
         });
         
-        // שמירת השליחות
+                        // שמירת השליחות
         db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
             [extractedData.customerName, extractedData.product, extractedData.price, extractedData.address || '', extractedData.phone || '', timestamp.toISOString()], 
             function(err) {
@@ -410,6 +410,9 @@ bot.on('callback_query', (callbackQuery) => {
                     delete userState[extractionChatId];
                     return;
                 }
+                
+                // עדכון המלאי - הורדת יחידה אחת מהמוצר
+                updateInventoryAfterDelivery(extractedData.product);
                 
                 // המרה לזמן ישראלי
                 const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
@@ -910,6 +913,46 @@ const isValidNumber = (str) => {
     return !isNaN(num) && isFinite(num) && num > 0;
 };
 
+// פונקציה להורדת מוצר מהמלאי
+const updateInventoryAfterDelivery = (itemName) => {
+    if (!itemName) return;
+    
+    // חיפוש המוצר במלאי
+    db.get(`SELECT * FROM inventory WHERE item_name = ? COLLATE NOCASE`, [itemName], (err, row) => {
+        if (err) {
+            console.error('Error checking inventory:', err.message);
+            return;
+        }
+        
+        if (row) {
+            const newQuantity = row.quantity - 1;
+            
+            if (newQuantity <= 0) {
+                // אם הכמות הגיעה ל-0 או פחות, מחק את הפריט מהמלאי
+                db.run(`DELETE FROM inventory WHERE item_name = ? COLLATE NOCASE`, [itemName], (deleteErr) => {
+                    if (deleteErr) {
+                        console.error('Error deleting item from inventory:', deleteErr.message);
+                    } else {
+                        console.log(`📦 הפריט '${itemName}' הוסר מהמלאי (כמות הגיעה ל-0)`);
+                    }
+                });
+            } else {
+                // עדכן את הכמות במלאי
+                db.run(`UPDATE inventory SET quantity = ?, last_updated = ? WHERE item_name = ? COLLATE NOCASE`, 
+                    [newQuantity, new Date().toISOString(), itemName], (updateErr) => {
+                    if (updateErr) {
+                        console.error('Error updating inventory:', updateErr.message);
+                    } else {
+                        console.log(`📦 עודכן מלאי: '${itemName}' - כמות חדשה: ${newQuantity}`);
+                    }
+                });
+            }
+        } else {
+            console.log(`📦 הפריט '${itemName}' לא נמצא במלאי - לא בוצע עדכון`);
+        }
+    });
+};
+
 const sanitizeInput = (input) => {
     if (typeof input !== 'string') return '';
     return input.trim().replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '');
@@ -1019,6 +1062,10 @@ bot.on('message', (msg) => {
                 delete userState[chatId];
                 return console.error('Database error:', err.message);
             }
+            
+            // עדכון המלאי - הורדת יחידה אחת מהמוצר
+            updateInventoryAfterDelivery(item);
+            
             // המרה לזמן ישראלי
             const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
             const dateStr = israelTime.toLocaleDateString('he-IL', {
@@ -1798,6 +1845,10 @@ bot.on('message', (msg) => {
                             .catch(e => console.error('Error sending message:', e.message));
                         return console.error('Database error:', err.message);
                     }
+                    
+                    // עדכון המלאי - הורדת יחידה אחת מהמוצר
+                    updateInventoryAfterDelivery(item);
+                    
                     // המרה לזמן ישראלי
                     const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
                     const dateStr = israelTime.toLocaleDateString('he-IL', {
@@ -2435,6 +2486,9 @@ function handleNewContactDelivery(chatId, text) {
                     .catch(e => console.error('Error sending message:', e.message));
                 console.error('Database error:', transactionErr.message);
             } else {
+                // עדכון המלאי - הורדת יחידה אחת מהמוצר
+                updateInventoryAfterDelivery(item);
+                
                 // המרה לזמן ישראלי
                 const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
                 const dateStr = israelTime.toLocaleDateString('he-IL', {
