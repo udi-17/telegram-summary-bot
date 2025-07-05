@@ -216,7 +216,7 @@ const inventoryMenuKeyboard = {
         keyboard: [
             [{ text: 'הוסף פריט למלאי' }, { text: 'עדכן כמות' }],
             [{ text: 'מחק פריט' }, { text: 'חפש במלאי' }],
-            [{ text: 'חזור' }]
+            [{ text: 'חזור לתפריט הראשי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: true
