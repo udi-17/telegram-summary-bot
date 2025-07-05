@@ -883,6 +883,89 @@ bot.on('callback_query', (callbackQuery) => {
          });
          return;
      }
+
+     if (data.startsWith('view_customer_details:')) {
+         const customerName = data.substring('view_customer_details:'.length);
+         
+         // שליפת פרטי הלקוח
+         db.get(`SELECT * FROM customers WHERE name = ?`, [customerName], (err, customer) => {
+             if (err || !customer) {
+                 bot.editMessageText("אירעה שגיאה בשליפת פרטי הלקוח.", { chat_id: chatId, message_id: msg.message_id })
+                     .catch(e => console.error('Error editing message:', e.message));
+                 console.error('Database error:', err?.message);
+                 return;
+             }
+             
+             let message = `📋 פרטי הלקוח: ${customer.name}\n\n`;
+             message += `📞 טלפון: ${customer.phone || 'לא צוין'}\n`;
+             message += `🏠 כתובת: ${customer.address || 'לא צוין'}\n`;
+             message += `📧 אימייל: ${customer.email || 'לא צוין'}\n`;
+             message += `📝 הערות: ${customer.notes || 'לא צוין'}\n`;
+             
+             if (customer.created_at) {
+                 const createdDate = new Date(customer.created_at);
+                 const israelTime = new Date(createdDate.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                 const dateStr = israelTime.toLocaleDateString('he-IL');
+                 message += `📅 נוצר: ${dateStr}\n`;
+             }
+             
+             bot.editMessageText(message, { 
+                 chat_id: chatId, 
+                 message_id: msg.message_id,
+                 reply_markup: {
+                     inline_keyboard: [
+                         [
+                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_customers_menu' }
+                         ]
+                     ]
+                 }
+             }).catch(e => console.error('Error editing message:', e.message));
+         });
+         return;
+     }
+
+     if (data === 'back_to_customers_menu') {
+         // חזרה לרשימת הלקוחות
+         db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+             if (err) {
+                 bot.editMessageText("שגיאה בשליפת הלקוחות.", { chat_id: chatId, message_id: msg.message_id })
+                     .catch(e => console.error('Error editing message:', e.message));
+                 console.error('Database error:', err.message);
+                 return;
+             }
+             
+             if (rows.length === 0) {
+                 bot.editMessageText("📝 רשימת הלקוחות ריקה.\n\nניתן להוסיף לקוחות באמצעות:\n• כפתור 'הוסף לקוח חדש'\n• חילוץ חכם (נוסף אוטומטית)", { 
+                     chat_id: chatId, 
+                     message_id: msg.message_id
+                 }).catch(e => console.error('Error editing message:', e.message));
+                 return;
+             }
+             
+             // יצירת כפתורים לבחירת לקוח
+             const customerButtons = [];
+             rows.forEach(customer => {
+                 customerButtons.push([{
+                     text: `👤 ${customer.name}`,
+                     callback_data: `view_customer_details:${customer.name}`
+                 }]);
+             });
+             
+             customerButtons.push([{
+                 text: '↩️ חזור לתפריט',
+                 callback_data: 'cancel_action'
+             }]);
+             
+             bot.editMessageText("👤 בחר לקוח לצפייה בפרטים:", { 
+                 chat_id: chatId, 
+                 message_id: msg.message_id,
+                 reply_markup: {
+                     inline_keyboard: customerButtons
+                 }
+             }).catch(e => console.error('Error editing message:', e.message));
+         });
+         return;
+     }
 });
 
 // --- טיפול בשגיאות בוט ---
@@ -1517,13 +1600,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'חפש לקוח') {
     console.log(`Executing 'חפש לקוח' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם או טלפון הלקוח לחיפוש:")
-        .catch(err => console.error('Error sending message:', err.message));
-    
-    userState[chatId] = {
-        action: 'awaiting_customer_search',
-        timestamp: Date.now()
-    };
+    displayAllCustomers(chatId);
 
   } else if (command === 'מחק לקוח') {
     console.log(`Executing 'מחק לקוח' for chat ID: ${chatId}`);
@@ -2684,6 +2761,43 @@ function handleCustomerUpdate(chatId, text) {
 }
 
 
+
+function displayAllCustomers(chatId) {
+    db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת הלקוחות.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "📝 רשימת הלקוחות ריקה.\n\nניתן להוסיף לקוחות באמצעות:\n• כפתור 'הוסף לקוח חדש'\n• חילוץ חכם (נוסף אוטומטית)", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        // יצירת כפתורים לבחירת לקוח
+        const customerButtons = [];
+        rows.forEach(customer => {
+            customerButtons.push([{
+                text: `👤 ${customer.name}`,
+                callback_data: `view_customer_details:${customer.name}`
+            }]);
+        });
+        
+        customerButtons.push([{
+            text: '↩️ חזור לתפריט',
+            callback_data: 'cancel_action'
+        }]);
+        
+        bot.sendMessage(chatId, "👤 בחר לקוח לצפייה בפרטים:", { 
+            reply_markup: {
+                inline_keyboard: customerButtons
+            }
+        }).catch(e => console.error('Error sending message:', e.message));
+    });
+}
 
 function showCustomersForDeletion(chatId) {
     db.all("SELECT name FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
