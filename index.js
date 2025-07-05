@@ -813,7 +813,6 @@ bot.on('callback_query', (callbackQuery) => {
              
              let message = `📋 פרטי השליח: ${courier.name}\n\n`;
              message += `📞 טלפון: ${courier.phone || 'לא צוין'}\n`;
-             message += `💬 Chat ID: ${courier.chat_id || 'לא מחובר'}\n`;
              
              bot.editMessageText(message, { 
                  chat_id: chatId, 
