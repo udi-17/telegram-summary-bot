@@ -197,9 +197,7 @@ const contactsMenuKeyboard = {
     reply_markup: {
         keyboard: [
             [{ text: 'הוסף שליח חדש' }, { text: 'הצג שליחים' }],
-            [{ text: 'חפש שליח' }, { text: 'מחק שליח' }],
-            [{ text: 'ייבא שליחים' }, { text: 'ייצא שליחים' }],
-            [{ text: 'שליחות לשליח חדש' }],
+            [{ text: 'מחק שליח' }, { text: 'שליחות לשליח חדש' }],
             [{ text: 'חזור' }]
         ],
         resize_keyboard: true,
@@ -495,15 +493,7 @@ bot.on('message', (msg) => {
     return;
   }
 
-  if (state && state.action === 'awaiting_contact_search') {
-    handleContactSearch(chatId, text);
-    return;
-  }
 
-  if (state && state.action === 'awaiting_contacts_import') {
-    handleContactsImport(chatId, text);
-    return;
-  }
 
   if (state && state.action === 'awaiting_new_contact_delivery') {
     handleNewContactDelivery(chatId, text);
@@ -774,30 +764,6 @@ bot.on('message', (msg) => {
   } else if (command === 'הצג שליחים') {
     console.log(`Executing 'הצג שליחים' for chat ID: ${chatId}`);
     displayAllContacts(chatId);
-
-  } else if (command === 'חפש שליח') {
-    console.log(`Executing 'חפש שליח' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם או חלק משם השליח לחיפוש:")
-        .catch(err => console.error('Error sending message:', err.message));
-    
-    userState[chatId] = {
-        action: 'awaiting_contact_search',
-        timestamp: Date.now()
-    };
-
-  } else if (command === 'ייבא שליחים') {
-    console.log(`Executing 'ייבא שליחים' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח רשימת שליחים (שם אחד בכל שורה):\n\nדוגמה:\nישראל ישראלי\nמשה כהן\nדנה לוי")
-        .catch(err => console.error('Error sending message:', err.message));
-    
-    userState[chatId] = {
-        action: 'awaiting_contacts_import',
-        timestamp: Date.now()
-    };
-
-  } else if (command === 'ייצא שליחים') {
-    console.log(`Executing 'ייצא שליחים' for chat ID: ${chatId}`);
-    exportContacts(chatId);
 
   } else if (command === 'מחק שליח') {
     console.log(`Executing 'מחק שליח' for chat ID: ${chatId}`);
@@ -1667,123 +1633,41 @@ function handleNewContactAddition(chatId, text) {
     db.run(`INSERT INTO contacts (name) VALUES (?)`, [name], function(err) {
         if (err) {
             if (err.code === 'SQLITE_CONSTRAINT') {
-                bot.sendMessage(chatId, `איש הקשר '${name}' כבר קיים בספר הכתובות.`, contactsMenuKeyboard)
+                bot.sendMessage(chatId, `השליח '${name}' כבר קיים בספר הכתובות.`, contactsMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
             } else {
-                bot.sendMessage(chatId, "אירעה שגיאה בהוספת איש הקשר.", contactsMenuKeyboard)
+                bot.sendMessage(chatId, "אירעה שגיאה בהוספת השליח.", contactsMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
                 console.error('Database error:', err.message);
             }
         } else {
-            bot.sendMessage(chatId, `✅ איש הקשר '${name}' נוסף בהצלחה לספר הכתובות!`, contactsMenuKeyboard)
+            bot.sendMessage(chatId, `✅ השליח '${name}' נוסף בהצלחה לספר הכתובות!`, contactsMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
         }
         delete userState[chatId];
     });
 }
 
-function handleContactSearch(chatId, searchQuery) {
-    const query = `SELECT * FROM contacts WHERE name LIKE ? ORDER BY name COLLATE NOCASE`;
-    const searchPattern = `%${searchQuery}%`;
-    
-    db.all(query, [searchPattern], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה בחיפוש.", contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-        } else if (rows.length === 0) {
-            bot.sendMessage(chatId, `לא נמצאו אנשי קשר התואמים לחיפוש "${searchQuery}".`, contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        } else {
-            let message = `🔍 תוצאות חיפוש עבור "${searchQuery}":\n\n`;
-            
-            rows.forEach((contact, index) => {
-                message += `${index + 1}. 👤 ${contact.name}\n`;
-            });
-            
-            message += `\n📊 נמצאו ${rows.length} אנשי קשר`;
-            
-            bot.sendMessage(chatId, message, contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        }
-        delete userState[chatId];
-    });
-}
 
-function handleContactsImport(chatId, text) {
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
-    if (lines.length === 0) {
-        bot.sendMessage(chatId, "לא נמצאו שמות לייבוא.", contactsMenuKeyboard)
-            .catch(e => console.error('Error sending message:', e.message));
-        delete userState[chatId];
-        return;
-    }
-    
-    let imported = 0;
-    let duplicates = 0;
-    let errors = 0;
-    let processed = 0;
-    
-    const processNext = () => {
-        if (processed >= lines.length) {
-            // סיום עיבוד
-            let message = `📥 סיכום ייבוא אנשי קשר:\n\n`;
-            message += `✅ נוספו: ${imported} אנשי קשר\n`;
-            message += `⚠️ כפולים: ${duplicates} אנשי קשר\n`;
-            message += `❌ שגיאות: ${errors} אנשי קשר\n`;
-            message += `📊 סה"כ עובדו: ${processed} שמות`;
-            
-            bot.sendMessage(chatId, message, contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            delete userState[chatId];
-            return;
-        }
-        
-        const name = lines[processed];
-        processed++;
-        
-        // וולידציה בסיסית
-        if (name.length < 2 || name.length > 100) {
-            errors++;
-            processNext();
-            return;
-        }
-        
-        db.run(`INSERT INTO contacts (name) VALUES (?)`, [name], function(err) {
-            if (err) {
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    duplicates++;
-                } else {
-                    errors++;
-                    console.error('Database error importing contact:', err.message);
-                }
-            } else {
-                imported++;
-            }
-            processNext();
-        });
-    };
-    
-    processNext();
-}
+
+
 
 function displayAllContacts(chatId) {
     db.all("SELECT * FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", contactsMenuKeyboard)
+            bot.sendMessage(chatId, "שגיאה בשליפת השליחים.", contactsMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             console.error('Database error:', err.message);
             return;
         }
         
         if (rows.length === 0) {
-            bot.sendMessage(chatId, "📝 ספר הכתובות ריק.\n\nניתן להוסיף אנשי קשר באמצעות:\n• כפתור 'הוסף איש קשר חדש'\n• ייבוא מרשימה\n• רישום שליחות (נוסף אוטומטית)", contactsMenuKeyboard)
+            bot.sendMessage(chatId, "📝 ספר הכתובות ריק.\n\nניתן להוסיף שליחים באמצעות:\n• כפתור 'הוסף שליח חדש'\n• רישום שליחות (נוסף אוטומטית)", contactsMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             return;
         }
         
-        let message = `📞 ספר הכתובות (${rows.length} אנשי קשר):\n\n`;
+        let message = `📞 ספר הכתובות (${rows.length} שליחים):\n\n`;
         
         rows.forEach((contact, index) => {
             message += `${index + 1}. 👤 ${contact.name}\n`;
@@ -1823,7 +1707,7 @@ function displayAllContacts(chatId) {
 function showContactsForDeletion(chatId) {
     db.all("SELECT name FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
         if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", contactsMenuKeyboard)
+            bot.sendMessage(chatId, "שגיאה בשליפת השליחים.", contactsMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             console.error('Database error:', err.message);
             return;
@@ -1838,74 +1722,18 @@ function showContactsForDeletion(chatId) {
         const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.name}`, callback_data: `delete_contact:${row.name}` }]);
         inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
         
-        bot.sendMessage(chatId, "⚠️ בחר איש קשר למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+        bot.sendMessage(chatId, "⚠️ בחר שליח למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
             .catch(e => console.error('Error sending message:', e.message));
     });
 }
 
-function exportContacts(chatId) {
-    db.all("SELECT * FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק, אין מה לייצא.", contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        
-        let exportText = `📤 ייצוא אנשי קשר (${rows.length} אנשי קשר)\n`;
-        exportText += `תאריך: ${new Date().toLocaleDateString('he-IL')}\n\n`;
-        exportText += `רשימת אנשי הקשר:\n`;
-        exportText += `${'='.repeat(30)}\n`;
-        
-        rows.forEach((contact, index) => {
-            exportText += `${index + 1}. ${contact.name}\n`;
-        });
-        
-        exportText += `${'='.repeat(30)}\n`;
-        exportText += `סה"כ: ${rows.length} אנשי קשר`;
-        
-        // חלוקת הודעות ארוכות
-        const maxLength = 4000;
-        if (exportText.length > maxLength) {
-            const parts = [];
-            let currentPart = '';
-            const lines = exportText.split('\n');
-            
-            for (const line of lines) {
-                if (currentPart.length + line.length > maxLength) {
-                    parts.push(currentPart);
-                    currentPart = line + '\n';
-                } else {
-                    currentPart += line + '\n';
-                }
-            }
-            if (currentPart) parts.push(currentPart);
-            
-            parts.forEach((part, index) => {
-                setTimeout(() => {
-                    const options = index === parts.length - 1 ? contactsMenuKeyboard : {};
-                    bot.sendMessage(chatId, part, options)
-                        .catch(e => console.error('Error sending message:', e.message));
-                }, index * 100);
-            });
-        } else {
-            bot.sendMessage(chatId, exportText, contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        }
-    });
-}
+
 
 function handleNewContactDelivery(chatId, text) {
     const parts = text.split(/\s+/);
     
     if (parts.length < 4) {
-        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם איש הקשר, פריט, סכום ויעד.\n\nדוגמה: דוד כהן שולחן 500 תל אביב", contactsMenuKeyboard)
+        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם השליח, פריט, סכום ויעד.\n\nדוגמה: דוד כהן שולחן 500 תל אביב", contactsMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         delete userState[chatId];
         return;
@@ -1935,7 +1763,7 @@ function handleNewContactDelivery(chatId, text) {
 
     // Validate components
     if (!recipient || recipient.length < 2) {
-        bot.sendMessage(chatId, "שם איש הקשר קצר מדי.", contactsMenuKeyboard)
+        bot.sendMessage(chatId, "שם השליח קצר מדי.", contactsMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         delete userState[chatId];
         return;
@@ -1995,9 +1823,9 @@ function handleNewContactDelivery(chatId, text) {
                 message += `🕐 שעה: ${timeStr}\n\n`;
                 
                 if (this.changes > 0) {
-                    message += `📞 איש הקשר '${recipient}' נוסף לספר הכתובות!`;
+                    message += `📞 השליח '${recipient}' נוסף לספר הכתובות!`;
                 } else {
-                    message += `📞 איש הקשר '${recipient}' כבר קיים בספר הכתובות.`;
+                    message += `📞 השליח '${recipient}' כבר קיים בספר הכתובות.`;
                 }
                 
                 bot.sendMessage(chatId, message, contactsMenuKeyboard)
