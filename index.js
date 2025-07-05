@@ -847,9 +847,17 @@ bot.on('callback_query', (callbackQuery) => {
          console.log(`Handling back_to_contacts_main_menu for chat ID: ${chatId}`);
          bot.editMessageText("בחר פעולה לניהול השליחים:", { 
              chat_id: chatId, 
-             message_id: msg.message_id,
-             reply_markup: contactsMenuKeyboard.reply_markup
-         }).catch(e => console.error('Error editing message:', e.message));
+             message_id: msg.message_id
+         }).then(() => {
+             // שליחת תפריט חדש
+             bot.sendMessage(chatId, "בחר פעולה לניהול השליחים:", contactsMenuKeyboard)
+                 .catch(e => console.error('Error sending message:', e.message));
+         }).catch(e => {
+             console.error('Error editing message:', e.message);
+             // אם העדכון נכשל, שלח הודעה חדשה
+             bot.sendMessage(chatId, "בחר פעולה לניהול השליחים:", contactsMenuKeyboard)
+                 .catch(e2 => console.error('Error sending message:', e2.message));
+         });
          return;
      }
 
@@ -944,9 +952,17 @@ bot.on('callback_query', (callbackQuery) => {
          console.log(`Handling back_to_customers_main_menu for chat ID: ${chatId}`);
          bot.editMessageText("בחר פעולה לניהול הלקוחות:", { 
              chat_id: chatId, 
-             message_id: msg.message_id,
-             reply_markup: customersMenuKeyboard.reply_markup
-         }).catch(e => console.error('Error editing message:', e.message));
+             message_id: msg.message_id
+         }).then(() => {
+             // שליחת תפריט חדש
+             bot.sendMessage(chatId, "בחר פעולה לניהול הלקוחות:", customersMenuKeyboard)
+                 .catch(e => console.error('Error sending message:', e.message));
+         }).catch(e => {
+             console.error('Error editing message:', e.message);
+             // אם העדכון נכשל, שלח הודעה חדשה
+             bot.sendMessage(chatId, "בחר פעולה לניהול הלקוחות:", customersMenuKeyboard)
+                 .catch(e2 => console.error('Error sending message:', e2.message));
+         });
          return;
      }
 
