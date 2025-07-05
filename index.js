@@ -841,7 +841,19 @@ bot.on('callback_query', (callbackQuery) => {
          return;
      }
 
-     if (data === 'back_to_contacts_menu') {
+     if (data === 'back_to_contacts_main_menu') {
+         // חזרה לתפריט השליחים הראשי
+         bot.editMessageText("בחר פעולה לניהול השליחים:", { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: contactsMenuKeyboard.reply_markup
+         }).catch(e => console.error('Error editing message:', e.message));
+         return;
+     }
+
+
+
+     if (data === 'back_to_contacts_list') {
          // חזרה לרשימת השליחים
          db.all("SELECT * FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
              if (err) {
@@ -869,8 +881,8 @@ bot.on('callback_query', (callbackQuery) => {
              });
              
              courierButtons.push([{
-                 text: '↩️ חזור',
-                 callback_data: 'back_to_contacts_menu'
+                 text: '↩️ חזור לתפריט שליחים',
+                 callback_data: 'back_to_contacts_main_menu'
              }]);
              
              bot.editMessageText("🚚 בחר שליח לצפייה בפרטים:", { 
@@ -915,7 +927,7 @@ bot.on('callback_query', (callbackQuery) => {
                  reply_markup: {
                      inline_keyboard: [
                          [
-                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_customers_menu' }
+                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_customers_list' }
                          ]
                      ]
                  }
@@ -924,7 +936,17 @@ bot.on('callback_query', (callbackQuery) => {
          return;
      }
 
-     if (data === 'back_to_customers_menu') {
+     if (data === 'back_to_customers_main_menu') {
+         // חזרה לתפריט הלקוחות הראשי
+         bot.editMessageText("בחר פעולה לניהול הלקוחות:", { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: customersMenuKeyboard.reply_markup
+         }).catch(e => console.error('Error editing message:', e.message));
+         return;
+     }
+
+     if (data === 'back_to_customers_list') {
          // חזרה לרשימת הלקוחות
          db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
              if (err) {
@@ -952,8 +974,8 @@ bot.on('callback_query', (callbackQuery) => {
              });
              
              customerButtons.push([{
-                 text: '↩️ חזור לתפריט',
-                 callback_data: 'cancel_action'
+                 text: '↩️ חזור לתפריט לקוחות',
+                 callback_data: 'back_to_customers_main_menu'
              }]);
              
              bot.editMessageText("👤 בחר לקוח לצפייה בפרטים:", { 
@@ -966,6 +988,8 @@ bot.on('callback_query', (callbackQuery) => {
          });
          return;
      }
+
+
 });
 
 // --- טיפול בשגיאות בוט ---
@@ -2448,8 +2472,8 @@ function displayAllContacts(chatId) {
         });
         
         courierButtons.push([{
-            text: '↩️ חזור',
-            callback_data: 'back_to_contacts_menu'
+            text: '↩️ חזור לתפריט שליחים',
+            callback_data: 'back_to_contacts_main_menu'
         }]);
         
         bot.sendMessage(chatId, "🚚 בחר שליח לצפייה בפרטים:", { 
@@ -2476,7 +2500,7 @@ function showContactsForDeletion(chatId) {
         }
         
         const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.name}`, callback_data: `delete_contact:${row.name}` }]);
-        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        inlineKeyboard.push([{ text: "↩️ חזור לתפריט שליחים", callback_data: 'back_to_contacts_main_menu' }]);
         
         bot.sendMessage(chatId, "⚠️ בחר שליח למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
             .catch(e => console.error('Error sending message:', e.message));
@@ -2787,8 +2811,8 @@ function displayAllCustomers(chatId) {
         });
         
         customerButtons.push([{
-            text: '↩️ חזור לתפריט',
-            callback_data: 'cancel_action'
+            text: '↩️ חזור לתפריט לקוחות',
+            callback_data: 'back_to_customers_main_menu'
         }]);
         
         bot.sendMessage(chatId, "👤 בחר לקוח לצפייה בפרטים:", { 
@@ -2815,7 +2839,7 @@ function showCustomersForDeletion(chatId) {
         }
         
         const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.name}`, callback_data: `delete_customer:${row.name}` }]);
-        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        inlineKeyboard.push([{ text: "↩️ חזור לתפריט לקוחות", callback_data: 'back_to_customers_main_menu' }]);
         
         bot.sendMessage(chatId, "⚠️ בחר לקוח למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
             .catch(e => console.error('Error sending message:', e.message));
