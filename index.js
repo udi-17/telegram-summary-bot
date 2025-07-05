@@ -170,6 +170,20 @@ const inventoryMenuKeyboard = {
     }
 };
 
+// --- תפריט ניהול אנשי קשר ---
+const contactsMenuKeyboard = {
+    reply_markup: {
+        keyboard: [
+            [{ text: 'הוסף איש קשר חדש' }, { text: 'הצג אנשי קשר' }],
+            [{ text: 'חפש איש קשר' }, { text: 'מחק איש קשר' }],
+            [{ text: 'ייבא אנשי קשר' }, { text: 'ייצא אנשי קשר' }],
+            [{ text: 'חזור' }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
+    }
+};
+
 // --- טיפול בכפתורים (Callback Queries) ---
 bot.on('callback_query', (callbackQuery) => {
     const msg = callbackQuery.message;
