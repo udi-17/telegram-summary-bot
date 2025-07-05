@@ -37,6 +37,29 @@ const initializeDatabaseAndStartServices = () => {
             chat_id INTEGER PRIMARY KEY,
             type TEXT NOT NULL
         )`);
+        
+        // טבלת מלאי חדשה
+        db.run(`CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name TEXT NOT NULL UNIQUE,
+            quantity INTEGER NOT NULL DEFAULT 0,
+            unit TEXT DEFAULT 'יחידה',
+            min_quantity INTEGER DEFAULT 5,
+            location TEXT,
+            price REAL,
+            last_updated TEXT NOT NULL
+        )`);
+        
+        // טבלת תנועות מלאי
+        db.run(`CREATE TABLE IF NOT EXISTS inventory_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name TEXT NOT NULL,
+            movement_type TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            reason TEXT,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (product_name) REFERENCES inventory (product_name)
+        )`);
 
         // Add destination column for backwards compatibility - safe to run multiple times
         db.run('ALTER TABLE transactions ADD COLUMN destination TEXT', (err) => {
@@ -65,7 +88,8 @@ const mainMenuKeyboard = {
         keyboard: [
             [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
             [{ text: 'שבועי' }, { text: 'חודשי' }],
-            [{ text: 'אנשי קשר' }, { text: 'התחלה' }]
+            [{ text: 'אנשי קשר' }, { text: 'התחלה' }],
+            [{ text: 'מלאי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -103,6 +127,20 @@ const monthlyMenuKeyboard = {
         keyboard: [
             [{ text: 'החודש הנוכחי' }, { text: 'החודש שעבר' }],
             [{ text: 'חזור' }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
+    }
+};
+
+// --- תפריטי מלאי ---
+const inventoryMenuKeyboard = {
+    reply_markup: {
+        keyboard: [
+            [{ text: 'הצג מלאי' }, { text: 'הוסף מוצר' }],
+            [{ text: 'עדכן כמות' }, { text: 'הוצא מהמלאי' }],
+            [{ text: 'מחק מוצר' }, { text: 'מלאי נמוך' }],
+            [{ text: 'תנועות מלאי' }, { text: 'חזור' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: true
@@ -148,6 +186,53 @@ bot.on('callback_query', (callbackQuery) => {
         userState[chatId] = {
             action: 'awaiting_delivery_details',
             recipient: recipientName
+        };
+        return;
+    }
+    
+    // --- טיפול בפעולות מלאי ---
+    if (data.startsWith('delete_product:')) {
+        const productName = data.substring('delete_product:'.length);
+        
+        db.run(`DELETE FROM inventory WHERE product_name = ?`, [productName], function(err) {
+            if (err) {
+                bot.editMessageText("אירעה שגיאה במחיקת המוצר.", { chat_id: chatId, message_id: msg.message_id });
+                console.error(err.message);
+                return;
+            }
+            if (this.changes > 0) {
+                // מחק גם את תנועות המלאי של המוצר
+                db.run(`DELETE FROM inventory_movements WHERE product_name = ?`, [productName], (err) => {
+                    if (err) console.error("Error deleting inventory movements:", err.message);
+                });
+                bot.editMessageText(`המוצר '${productName}' נמחק בהצלחה מהמלאי.`, { chat_id: chatId, message_id: msg.message_id });
+            } else {
+                bot.editMessageText(`המוצר '${productName}' לא נמצא למחיקה.`, { chat_id: chatId, message_id: msg.message_id });
+            }
+        });
+        return;
+    }
+    
+    if (data.startsWith('update_product:')) {
+        const productName = data.substring('update_product:'.length);
+        bot.editMessageText(`נבחר מוצר: ${productName}`, { chat_id: chatId, message_id: msg.message_id });
+        bot.sendMessage(chatId, "שלח את הכמות החדשה (מספר חיובי להוספה, שלילי להפחתה):");
+        
+        userState[chatId] = {
+            action: 'awaiting_quantity_update',
+            productName: productName
+        };
+        return;
+    }
+    
+    if (data.startsWith('remove_from_inventory:')) {
+        const productName = data.substring('remove_from_inventory:'.length);
+        bot.editMessageText(`נבחר מוצר: ${productName}`, { chat_id: chatId, message_id: msg.message_id });
+        bot.sendMessage(chatId, "שלח את הכמות להוצאה מהמלאי ואת הסיבה:\nכמות סיבה\nלדוגמה: 5 נמכר ללקוח");
+        
+        userState[chatId] = {
+            action: 'awaiting_inventory_removal',
+            productName: productName
         };
         return;
     }
@@ -212,6 +297,166 @@ bot.on('message', (msg) => {
     return;
   }
   
+  // --- טיפול במצבי מלאי ---
+  if (state && state.action === 'awaiting_product_details') {
+    const parts = text.split(/\s+/);
+    if (parts.length < 2) {
+        bot.sendMessage(chatId, "פורמט לא נכון. שלח: שם_המוצר כמות [יחידה] [מינימום] [מיקום] [מחיר]", inventoryMenuKeyboard);
+        return;
+    }
+    
+    const productName = parts[0];
+    const quantity = parseInt(parts[1]);
+    const unit = parts[2] || 'יחידה';
+    const minQuantity = parseInt(parts[3]) || 5;
+    const location = parts[4] || null;
+    const price = parseFloat(parts[5]) || null;
+    
+    if (isNaN(quantity) || quantity < 0) {
+        bot.sendMessage(chatId, "הכמות חייבת להיות מספר חיובי.", inventoryMenuKeyboard);
+        return;
+    }
+    
+    const timestamp = new Date().toISOString();
+    
+    db.run(`INSERT INTO inventory (product_name, quantity, unit, min_quantity, location, price, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+        [productName, quantity, unit, minQuantity, location, price, timestamp], function(err) {
+        if (err) {
+            if (err.code === 'SQLITE_CONSTRAINT') {
+                bot.sendMessage(chatId, `המוצר '${productName}' כבר קיים במלאי.`, inventoryMenuKeyboard);
+            } else {
+                bot.sendMessage(chatId, "אירעה שגיאה בהוספת המוצר.", inventoryMenuKeyboard);
+                console.error(err.message);
+            }
+            delete userState[chatId];
+            return;
+        }
+        
+        // רשום תנועת מלאי
+        db.run(`INSERT INTO inventory_movements (product_name, movement_type, quantity, reason, timestamp) VALUES (?, 'הוספה', ?, 'מוצר חדש', ?)`,
+            [productName, quantity, timestamp], (err) => {
+            if (err) console.error("Error recording inventory movement:", err.message);
+        });
+        
+        bot.sendMessage(chatId, `המוצר '${productName}' נוסף בהצלחה עם כמות ${quantity} ${unit}.`, inventoryMenuKeyboard);
+        delete userState[chatId];
+    });
+    return;
+  }
+  
+  if (state && state.action === 'awaiting_quantity_update') {
+    const quantityChange = parseInt(text);
+    if (isNaN(quantityChange)) {
+        bot.sendMessage(chatId, "אנא שלח מספר תקין.", inventoryMenuKeyboard);
+        return;
+    }
+    
+    const productName = state.productName;
+    const timestamp = new Date().toISOString();
+    
+    db.get(`SELECT quantity FROM inventory WHERE product_name = ?`, [productName], (err, row) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה.", inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        if (!row) {
+            bot.sendMessage(chatId, "המוצר לא נמצא.", inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        const newQuantity = row.quantity + quantityChange;
+        if (newQuantity < 0) {
+            bot.sendMessage(chatId, `לא ניתן להפחית ${Math.abs(quantityChange)} - יש במלאי רק ${row.quantity} יחידות.`, inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        db.run(`UPDATE inventory SET quantity = ?, last_updated = ? WHERE product_name = ?`, 
+            [newQuantity, timestamp, productName], function(err) {
+            if (err) {
+                bot.sendMessage(chatId, "אירעה שגיאה בעדכון הכמות.", inventoryMenuKeyboard);
+                delete userState[chatId];
+                return;
+            }
+            
+            // רשום תנועת מלאי
+            const movementType = quantityChange > 0 ? 'הוספה' : 'הפחתה';
+            const reason = quantityChange > 0 ? 'עדכון כמות' : 'עדכון כמות';
+            db.run(`INSERT INTO inventory_movements (product_name, movement_type, quantity, reason, timestamp) VALUES (?, ?, ?, ?, ?)`,
+                [productName, movementType, Math.abs(quantityChange), reason, timestamp], (err) => {
+                if (err) console.error("Error recording inventory movement:", err.message);
+            });
+            
+            bot.sendMessage(chatId, `הכמות עודכנה בהצלחה. ${productName}: ${newQuantity} יחידות`, inventoryMenuKeyboard);
+            delete userState[chatId];
+        });
+    });
+    return;
+  }
+  
+  if (state && state.action === 'awaiting_inventory_removal') {
+    const parts = text.split(/\s+/);
+    if (parts.length < 2) {
+        bot.sendMessage(chatId, "פורמט לא נכון. שלח: כמות סיבה", inventoryMenuKeyboard);
+        return;
+    }
+    
+    const quantityToRemove = parseInt(parts[0]);
+    const reason = parts.slice(1).join(' ');
+    
+    if (isNaN(quantityToRemove) || quantityToRemove <= 0) {
+        bot.sendMessage(chatId, "הכמות חייבת להיות מספר חיובי.", inventoryMenuKeyboard);
+        return;
+    }
+    
+    const productName = state.productName;
+    const timestamp = new Date().toISOString();
+    
+    db.get(`SELECT quantity FROM inventory WHERE product_name = ?`, [productName], (err, row) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה.", inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        if (!row) {
+            bot.sendMessage(chatId, "המוצר לא נמצא.", inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        if (row.quantity < quantityToRemove) {
+            bot.sendMessage(chatId, `לא ניתן להוציא ${quantityToRemove} - יש במלאי רק ${row.quantity} יחידות.`, inventoryMenuKeyboard);
+            delete userState[chatId];
+            return;
+        }
+        
+        const newQuantity = row.quantity - quantityToRemove;
+        
+        db.run(`UPDATE inventory SET quantity = ?, last_updated = ? WHERE product_name = ?`, 
+            [newQuantity, timestamp, productName], function(err) {
+            if (err) {
+                bot.sendMessage(chatId, "אירעה שגיאה בעדכון הכמות.", inventoryMenuKeyboard);
+                delete userState[chatId];
+                return;
+            }
+            
+            // רשום תנועת מלאי
+            db.run(`INSERT INTO inventory_movements (product_name, movement_type, quantity, reason, timestamp) VALUES (?, 'הוצאה', ?, ?, ?)`,
+                [productName, quantityToRemove, reason, timestamp], (err) => {
+                if (err) console.error("Error recording inventory movement:", err.message);
+            });
+            
+            bot.sendMessage(chatId, `הוצאו ${quantityToRemove} יחידות מ-${productName}. נותרו: ${newQuantity} יחידות\nסיבה: ${reason}`, inventoryMenuKeyboard);
+            delete userState[chatId];
+        });
+    });
+    return;
+  }
+  
   // --- נתב פקודות ראשי ---
   let command = text.toLowerCase().trim();
 
@@ -222,7 +467,7 @@ bot.on('message', (msg) => {
 
   if (command === 'התחלה') {
     console.log(`Executing 'התחלה' for chat ID: ${chatId}`);
-    const response = "ברוך הבא לבוט הסיכומים! \n\n" +
+    const response = "ברוך הבא לבוט הסיכומים והמלאי! \n\n" +
       "כדי לתעד שליחה, פשוט כתוב:\n" +
       "שם הנמען שם הפריט סכום יעד [תאריך/שעה]\n" +
       "התאריך והיעד אופציונליים.\n\n" +
@@ -241,6 +486,14 @@ bot.on('message', (msg) => {
       "סיכום [תאריך] [שם] - סיכום ליום ספציפי (אפשר גם בלי שם)\n\n" +
       "ניהול אנשי קשר:\n" +
       "אנשי קשר\nהוסף איש קשר [שם]\nמחק איש קשר\nשליחות חדשה\n\n" +
+      "ניהול מלאי:\n" +
+      "מלאי - תפריט ניהול מלאי\n" +
+      "הצג מלאי - רשימת כל המוצרים\n" +
+      "הוסף מוצר - הוספת מוצר חדש\n" +
+      "עדכן כמות - עדכון כמות מוצר\n" +
+      "הוצא מהמלאי - הוצאת מוצר מהמלאי\n" +
+      "מלאי נמוך - מוצרים עם מלאי נמוך\n" +
+      "תנועות מלאי - היסטוריית תנועות\n\n" +
       "סיכומים אוטומטיים:\n" +
       "הרשמה\nביטול הרשמה";
     bot.sendMessage(chatId, response, mainMenuKeyboard);
@@ -551,6 +804,161 @@ bot.on('message', (msg) => {
         bot.sendMessage(chatId, message, mainMenuKeyboard);
     });
   
+  // --- פקודות ניהול מלאי ---
+  } else if (command === 'מלאי') {
+    console.log(`Executing 'מלאי' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "בחר פעולה לניהול המלאי:", inventoryMenuKeyboard);
+    
+  } else if (command === 'הצג מלאי') {
+    console.log(`Executing 'הצג מלאי' for chat ID: ${chatId}`);
+    db.all("SELECT * FROM inventory ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת נתוני המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק. הוסף מוצרים חדשים.", inventoryMenuKeyboard);
+            return;
+        }
+        
+        let message = '*רשימת המלאי:*\n\n';
+        rows.forEach(row => {
+            const lastUpdated = new Date(row.last_updated);
+            const dateStr = `${lastUpdated.getDate().toString().padStart(2, '0')}/${(lastUpdated.getMonth() + 1).toString().padStart(2, '0')}`;
+            
+            let status = row.quantity <= row.min_quantity ? '⚠️' : '✅';
+            let locationStr = row.location ? ` 📍${row.location}` : '';
+            let priceStr = row.price ? ` 💰${row.price}₪` : '';
+            
+            message += `${status} *${row.product_name}*\n`;
+            message += `   📦 ${row.quantity} ${row.unit} (מינימום: ${row.min_quantity})${locationStr}${priceStr}\n`;
+            message += `   📅 עודכן: ${dateStr}\n\n`;
+        });
+        
+        bot.sendMessage(chatId, message, { ...inventoryMenuKeyboard, parse_mode: 'Markdown' });
+    });
+    
+  } else if (command === 'הוסף מוצר') {
+    console.log(`Executing 'הוסף מוצר' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח פרטי המוצר החדש בפורמט:\nשם_המוצר כמות [יחידה] [מינימום] [מיקום] [מחיר]\n\nדוגמה: אקמול 50 קופסאות 10 מחסן_א 25.5", inventoryMenuKeyboard);
+    userState[chatId] = { action: 'awaiting_product_details' };
+    
+  } else if (command === 'עדכן כמות') {
+    console.log(`Executing 'עדכן כמות' for chat ID: ${chatId}`);
+    db.all("SELECT product_name, quantity, unit FROM inventory ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת נתוני המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק. הוסף מוצרים חדשים.", inventoryMenuKeyboard);
+            return;
+        }
+        
+        const inlineKeyboard = rows.map(row => [{ 
+            text: `${row.product_name} (${row.quantity} ${row.unit})`, 
+            callback_data: `update_product:${row.product_name}` 
+        }]);
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        
+        bot.sendMessage(chatId, "בחר מוצר לעדכון כמות:", { reply_markup: { inline_keyboard: inlineKeyboard } });
+    });
+    
+  } else if (command === 'הוצא מהמלאי') {
+    console.log(`Executing 'הוצא מהמלאי' for chat ID: ${chatId}`);
+    db.all("SELECT product_name, quantity, unit FROM inventory WHERE quantity > 0 ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת נתוני המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "אין מוצרים עם מלאי זמין.", inventoryMenuKeyboard);
+            return;
+        }
+        
+        const inlineKeyboard = rows.map(row => [{ 
+            text: `${row.product_name} (${row.quantity} ${row.unit})`, 
+            callback_data: `remove_from_inventory:${row.product_name}` 
+        }]);
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        
+        bot.sendMessage(chatId, "בחר מוצר להוצאה מהמלאי:", { reply_markup: { inline_keyboard: inlineKeyboard } });
+    });
+    
+  } else if (command === 'מחק מוצר') {
+    console.log(`Executing 'מחק מוצר' for chat ID: ${chatId}`);
+    db.all("SELECT product_name, quantity, unit FROM inventory ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת נתוני המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק, אין מוצרים למחיקה.", inventoryMenuKeyboard);
+            return;
+        }
+        
+        const inlineKeyboard = rows.map(row => [{ 
+            text: `❌ ${row.product_name} (${row.quantity} ${row.unit})`, 
+            callback_data: `delete_product:${row.product_name}` 
+        }]);
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        
+        bot.sendMessage(chatId, "בחר מוצר למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } });
+    });
+    
+  } else if (command === 'מלאי נמוך') {
+    console.log(`Executing 'מלאי נמוך' for chat ID: ${chatId}`);
+    db.all("SELECT * FROM inventory WHERE quantity <= min_quantity ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת נתוני המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "🎉 כל המוצרים עם מלאי תקין!", inventoryMenuKeyboard);
+            return;
+        }
+        
+        let message = '*⚠️ מוצרים עם מלאי נמוך:*\n\n';
+        rows.forEach(row => {
+            let locationStr = row.location ? ` 📍${row.location}` : '';
+            message += `🔴 *${row.product_name}*\n`;
+            message += `   📦 ${row.quantity} ${row.unit} (מינימום: ${row.min_quantity})${locationStr}\n`;
+            message += `   💡 חסרים: ${row.min_quantity - row.quantity + 5} ${row.unit}\n\n`;
+        });
+        
+        bot.sendMessage(chatId, message, { ...inventoryMenuKeyboard, parse_mode: 'Markdown' });
+    });
+    
+  } else if (command === 'תנועות מלאי') {
+    console.log(`Executing 'תנועות מלאי' for chat ID: ${chatId}`);
+    db.all("SELECT * FROM inventory_movements ORDER BY timestamp DESC LIMIT 20", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת תנועות המלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "אין תנועות מלאי.", inventoryMenuKeyboard);
+            return;
+        }
+        
+        let message = '*📋 תנועות מלאי אחרונות:*\n\n';
+        rows.forEach(row => {
+            const date = new Date(row.timestamp);
+            const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            
+            let icon = row.movement_type === 'הוספה' ? '➕' : '➖';
+            if (row.movement_type === 'הוצאה') icon = '📤';
+            
+            message += `${icon} *${row.product_name}*\n`;
+            message += `   📊 ${row.movement_type}: ${row.quantity} יחידות\n`;
+            message += `   📝 ${row.reason}\n`;
+            message += `   📅 ${dateStr} ${timeStr}\n\n`;
+        });
+        
+        bot.sendMessage(chatId, message, { ...inventoryMenuKeyboard, parse_mode: 'Markdown' });
+    });
+    
   } else {
     // --- CATCH-ALL for dynamic buttons and free-text entry ---
 
@@ -740,7 +1148,38 @@ const scheduleTasks = () => {
             subscribers.forEach(chatId => sendSummary(chatId, 'monthly'));
         });
         
+        // Daily inventory check at 08:00
+        cron.schedule('0 8 * * *', () => {
+            console.log('Running daily inventory check...');
+            subscribers.forEach(chatId => checkLowInventory(chatId));
+        });
+        
         console.log(`Scheduled tasks for ${subscribers.length} subscribers.`);
+    });
+};
+
+// --- בדיקת מלאי נמוך ---
+const checkLowInventory = (chatId) => {
+    db.all("SELECT * FROM inventory WHERE quantity <= min_quantity ORDER BY product_name", [], (err, rows) => {
+        if (err) {
+            console.error("Error checking low inventory:", err.message);
+            return;
+        }
+        if (rows.length === 0) {
+            return; // No low inventory items
+        }
+        
+        let message = '*🚨 התראת מלאי נמוך:*\n\n';
+        rows.forEach(row => {
+            let locationStr = row.location ? ` 📍${row.location}` : '';
+            message += `🔴 *${row.product_name}*\n`;
+            message += `   📦 ${row.quantity} ${row.unit} (מינימום: ${row.min_quantity})${locationStr}\n`;
+            message += `   💡 מומלץ להזמין: ${row.min_quantity - row.quantity + 10} ${row.unit}\n\n`;
+        });
+        
+        message += '_התראה אוטומטית - בדיקת מלאי יומית_';
+        
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     });
 };
 
