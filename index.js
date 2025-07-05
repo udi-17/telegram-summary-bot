@@ -594,23 +594,26 @@ bot.on('callback_query', (callbackQuery) => {
              return;
          }
          
-         // שליפת רשימת השליחים (אנשי קשר)
+         // שליפת רשימת השליחים (רק עם chat_id תקין)
          console.log('Fetching couriers from contacts table...');
-         db.all(`SELECT name, chat_id, phone FROM contacts ORDER BY name`, (err, couriers) => {
+         db.all(`SELECT name, chat_id, phone FROM contacts WHERE chat_id IS NOT NULL AND chat_id != '' ORDER BY name`, (err, couriers) => {
              if (err) {
                  console.error('Database error when fetching couriers:', err.message);
                  bot.editMessageText("אירעה שגיאה בשליפת רשימת השליחים.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
                  return;
              }
-             console.log('Fetched couriers:', couriers.length, 'found');
+             console.log('Fetched active couriers:', couriers.length, 'found');
              
              if (couriers.length === 0) {
-                 bot.editMessageText("לא נמצאו שליחים במערכת.", { 
+                 bot.editMessageText("אין שליחים פעילים במערכת.\n\nכדי שליח יהיה זמין, הוא צריך לשלוח /start לבוט.", { 
                      chat_id: chatId, 
                      message_id: msg.message_id,
                      reply_markup: {
                          inline_keyboard: [
+                             [
+                                 { text: '📝 שליחה ידנית', callback_data: `manual_delivery:${extractionChatId}` }
+                             ],
                              [
                                  { text: '➕ הוסף שליח חדש', callback_data: `new_courier_delivery:${extractionChatId}` }
                              ],
@@ -633,6 +636,7 @@ bot.on('callback_query', (callbackQuery) => {
              });
              
              courierButtons.push([
+                 { text: '📝 שליחה ידנית', callback_data: `manual_delivery:${extractionChatId}` },
                  { text: '➕ הוסף שליח חדש', callback_data: `new_courier_delivery:${extractionChatId}` }
              ]);
              
@@ -717,6 +721,44 @@ bot.on('callback_query', (callbackQuery) => {
                      }).catch(e => console.error('Error editing message:', e.message));
                  });
          });
+         return;
+     }
+
+     if (data.startsWith('manual_delivery:')) {
+         const extractionChatId = data.substring('manual_delivery:'.length);
+         const state = userState[extractionChatId];
+         
+         if (!state || state.action !== 'awaiting_courier_selection') {
+             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
+                 .catch(e => console.error('Error editing message:', e.message));
+             return;
+         }
+         
+         // הצגת פרטי השליחות לשליחה ידנית
+         const deliveryData = state.transactionData;
+         let manualMessage = `📋 פרטי השליחות לשליחה ידנית:\n\n`;
+         manualMessage += `📝 מספר רישום: #${state.transactionId}\n`;
+         manualMessage += `👤 נמען: ${deliveryData.recipient}\n`;
+         manualMessage += `🛍️ מוצר: ${deliveryData.item}\n`;
+         manualMessage += `💰 סכום: ${deliveryData.amount}₪\n`;
+         manualMessage += `🏠 כתובת: ${deliveryData.address}\n`;
+         manualMessage += `📞 טלפון: ${deliveryData.phone}\n`;
+         manualMessage += `📅 תאריך: ${deliveryData.date}\n`;
+         manualMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
+         manualMessage += `📋 העתק את הפרטים ושלח ידנית לשליח שתבחר.`;
+         
+         bot.editMessageText(manualMessage, { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: {
+                 inline_keyboard: [
+                     [
+                         { text: '↩️ חזור לבחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
+                         { text: '✅ סיום', callback_data: 'finish_extraction' }
+                     ]
+                 ]
+             }
+         }).catch(e => console.error('Error editing message:', e.message));
          return;
      }
 
