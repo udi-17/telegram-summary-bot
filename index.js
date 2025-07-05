@@ -229,7 +229,7 @@ const contactsMenuKeyboard = {
         keyboard: [
             [{ text: 'הוסף שליח חדש' }, { text: 'הצג שליחים' }],
             [{ text: 'מחק שליח' }, { text: 'שליחות לשליח חדש' }],
-            [{ text: 'חזור' }]
+            [{ text: 'חזור לתפריט הראשי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: true
@@ -256,7 +256,7 @@ const customersMenuKeyboard = {
             [{ text: 'הוסף לקוח חדש' }, { text: 'חפש לקוח' }],
             [{ text: 'מחק לקוח' }, { text: 'עדכן פרטי לקוח' }],
             [{ text: 'שליחות ללקוח' }],
-            [{ text: 'חזור' }]
+            [{ text: 'חזור לתפריט הראשי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: true
@@ -869,8 +869,8 @@ bot.on('callback_query', (callbackQuery) => {
              });
              
              courierButtons.push([{
-                 text: '↩️ חזור לתפריט',
-                 callback_data: 'cancel_action'
+                 text: '↩️ חזור',
+                 callback_data: 'back_to_contacts_menu'
              }]);
              
              bot.editMessageText("🚚 בחר שליח לצפייה בפרטים:", { 
@@ -1251,7 +1251,7 @@ bot.on('message', (msg) => {
   let command = text.toLowerCase().trim();
 
   // נטפל בכפתור "חזור" על ידי המרתו לפקודת "התחלה"
-  if (command === 'חזור') {
+  if (command === 'חזור' || command === 'חזור לתפריט הראשי') {
       command = 'התחלה';
   }
 
