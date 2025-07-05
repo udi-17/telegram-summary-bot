@@ -595,24 +595,46 @@ bot.on('message', (msg) => {
 
   } else if (command === 'אנשי קשר') {
     console.log(`Executing 'אנשי קשר' for chat ID: ${chatId}`);
-    db.all("SELECT name FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת אנשי הקשר.", mainMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, "ספר הכתובות ריק. ניתן להוסיף איש קשר עם הפקודה 'הוסף איש קשר [שם]', או פשוט לרשום שליחות והנמען יישמר אוטומטית.", mainMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        const contactButtons = rows.map(row => [{ text: row.name }]);
-        contactButtons.push([{ text: 'חזור' }]);
-        const contactsKeyboard = { reply_markup: { keyboard: contactButtons, resize_keyboard: true, one_time_keyboard: true } };
-        bot.sendMessage(chatId, "בחר איש קשר לקבלת סיכום מלא:", contactsKeyboard)
-            .catch(e => console.error('Error sending message:', e.message));
-    });
+    bot.sendMessage(chatId, "בחר פעולה לניהול אנשי הקשר:", contactsMenuKeyboard)
+        .catch(err => console.error('Error sending message:', err.message));
+
+  } else if (command === 'הוסף איש קשר חדש') {
+    console.log(`Executing 'הוסף איש קשר חדש' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם איש הקשר החדש:\n\nדוגמה: ישראל ישראלי")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_new_contact',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'הצג אנשי קשר') {
+    console.log(`Executing 'הצג אנשי קשר' for chat ID: ${chatId}`);
+    displayAllContacts(chatId);
+
+  } else if (command === 'חפש איש קשר') {
+    console.log(`Executing 'חפש איש קשר' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם או חלק משם איש הקשר לחיפוש:")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_contact_search',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'ייבא אנשי קשר') {
+    console.log(`Executing 'ייבא אנשי קשר' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח רשימת אנשי קשר (שם אחד בכל שורה):\n\nדוגמה:\nישראל ישראלי\nמשה כהן\nדנה לוי")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_contacts_import',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'ייצא אנשי קשר') {
+    console.log(`Executing 'ייצא אנשי קשר' for chat ID: ${chatId}`);
+    exportContacts(chatId);
 
   } else if (command.startsWith('הוסף איש קשר ')) {
     const name = command.substring('הוסף איש קשר '.length).trim();
