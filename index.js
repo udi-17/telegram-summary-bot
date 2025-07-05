@@ -395,9 +395,134 @@ bot.on('callback_query', (callbackQuery) => {
                     .catch(e => console.error('Error editing message:', e.message));
                 
                 delete userState[extractionChatId];
-            });
-        return;
-    }
+                         });
+         return;
+     }
+
+     if (data.startsWith('edit_extraction:')) {
+         const extractionChatId = data.substring('edit_extraction:'.length);
+         const state = userState[extractionChatId];
+         
+         if (!state || state.action !== 'awaiting_extraction_confirmation') {
+             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
+                 .catch(e => console.error('Error editing message:', e.message));
+             return;
+         }
+         
+         bot.editMessageText("✏️ עריכת נתונים\n\nאיזה שדה תרצה לערוך?", { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: {
+                 inline_keyboard: [
+                     [
+                         { text: '👤 שם לקוח', callback_data: `edit_field:customerName:${extractionChatId}` },
+                         { text: '🛍️ מוצר', callback_data: `edit_field:product:${extractionChatId}` }
+                     ],
+                     [
+                         { text: '💰 מחיר', callback_data: `edit_field:price:${extractionChatId}` },
+                         { text: '🏠 כתובת', callback_data: `edit_field:address:${extractionChatId}` }
+                     ],
+                     [
+                         { text: '📞 טלפון', callback_data: `edit_field:phone:${extractionChatId}` }
+                     ],
+                     [
+                         { text: '↩️ חזור', callback_data: `back_to_confirmation:${extractionChatId}` },
+                         { text: '❌ בטל', callback_data: 'cancel_action' }
+                     ]
+                 ]
+             }
+         }).catch(e => console.error('Error editing message:', e.message));
+         return;
+     }
+
+     if (data.startsWith('edit_field:')) {
+         const parts = data.split(':');
+         const fieldName = parts[1];
+         const extractionChatId = parts[2];
+         const state = userState[extractionChatId];
+         
+         if (!state || state.action !== 'awaiting_extraction_confirmation') {
+             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
+                 .catch(e => console.error('Error editing message:', e.message));
+             return;
+         }
+         
+         const fieldNames = {
+             'customerName': 'שם לקוח',
+             'product': 'מוצר',
+             'price': 'מחיר',
+             'address': 'כתובת',
+             'phone': 'טלפון'
+         };
+         
+         const currentValue = state.extractedData[fieldName] || 'לא צוין';
+         
+         bot.editMessageText(`✏️ עריכת ${fieldNames[fieldName]}\n\nערך נוכחי: ${currentValue}\n\nשלח את הערך החדש:`, { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: {
+                 inline_keyboard: [
+                     [
+                         { text: '↩️ חזור', callback_data: `edit_extraction:${extractionChatId}` },
+                         { text: '❌ בטל', callback_data: 'cancel_action' }
+                     ]
+                 ]
+             }
+         }).catch(e => console.error('Error editing message:', e.message));
+         
+         // עדכון מצב המשתמש לעריכת שדה ספציפי
+         userState[extractionChatId] = {
+             ...state,
+             action: 'awaiting_field_edit',
+             editingField: fieldName,
+             editMessageId: msg.message_id
+         };
+         return;
+     }
+
+     if (data.startsWith('back_to_confirmation:')) {
+         const extractionChatId = data.substring('back_to_confirmation:'.length);
+         const state = userState[extractionChatId];
+         
+         if (!state || !state.extractedData) {
+             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
+                 .catch(e => console.error('Error editing message:', e.message));
+             return;
+         }
+         
+         // חזרה להצגת הנתונים לאישור
+         const data = state.extractedData;
+         let confirmationMessage = `🔍 הנתונים שחולצו מההודעה:\n\n`;
+         confirmationMessage += `👤 לקוח: ${data.customerName || 'לא נמצא'}\n`;
+         confirmationMessage += `🛍️ מוצר: ${data.product || 'לא נמצא'}\n`;
+         confirmationMessage += `💰 מחיר: ${data.price ? data.price + '₪' : 'לא נמצא'}\n`;
+         confirmationMessage += `🏠 כתובת: ${data.address || 'לא נמצא'}\n`;
+         confirmationMessage += `📞 טלפון: ${data.phone || 'לא נמצא'}\n\n`;
+         confirmationMessage += `✅ האם הנתונים נכונים?`;
+         
+         bot.editMessageText(confirmationMessage, { 
+             chat_id: chatId, 
+             message_id: msg.message_id,
+             reply_markup: {
+                 inline_keyboard: [
+                     [
+                         { text: '✅ כן, שמור', callback_data: `confirm_extraction:${extractionChatId}` },
+                         { text: '✏️ ערוך', callback_data: `edit_extraction:${extractionChatId}` }
+                     ],
+                     [
+                         { text: '❌ בטל', callback_data: 'cancel_action' }
+                     ]
+                 ]
+             }
+         }).catch(e => console.error('Error editing message:', e.message));
+         
+         // עדכון מצב המשתמש חזרה לאישור
+         userState[extractionChatId] = {
+             ...state,
+             action: 'awaiting_extraction_confirmation'
+         };
+         return;
+     }
 });
 
 // --- טיפול בשגיאות בוט ---
@@ -583,6 +708,12 @@ bot.on('message', (msg) => {
   // --- טיפול במצב המשתמש (חילוץ חכם) ---
   if (state && state.action === 'awaiting_smart_extraction') {
     handleSmartExtraction(chatId, text);
+    return;
+  }
+
+  // --- טיפול במצב המשתמש (עריכת שדה) ---
+  if (state && state.action === 'awaiting_field_edit') {
+    handleFieldEdit(chatId, text, state);
     return;
   }
 
@@ -2167,6 +2298,97 @@ function showCustomersForDeletion(chatId) {
     });
 }
 
+// --- פונקציה לעריכת שדה ---
+function handleFieldEdit(chatId, text, state) {
+    console.log(`Field edit for chat ${chatId}: editing ${state.editingField} with value "${text}"`);
+    
+    try {
+        const fieldName = state.editingField;
+        const sanitizedText = sanitizeInput(text);
+        
+        if (!sanitizedText) {
+            bot.sendMessage(chatId, "❌ לא ניתן להשתמש בערך ריק. נסה שוב או לחץ 'חזור'.")
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        // עדכון הנתונים
+        if (fieldName === 'price') {
+            const numericValue = parseFloat(sanitizedText);
+            if (isNaN(numericValue) || numericValue <= 0) {
+                bot.sendMessage(chatId, "❌ מחיר חייב להיות מספר חיובי. נסה שוב:")
+                    .catch(e => console.error('Error sending message:', e.message));
+                return;
+            }
+            state.extractedData[fieldName] = numericValue;
+        } else {
+            state.extractedData[fieldName] = sanitizedText;
+        }
+        
+        const fieldNames = {
+            'customerName': 'שם לקוח',
+            'product': 'מוצר',
+            'price': 'מחיר',
+            'address': 'כתובת',
+            'phone': 'טלפון'
+        };
+        
+        // עדכון ההודעה עם הנתונים החדשים
+        const data = state.extractedData;
+        let confirmationMessage = `✅ ${fieldNames[fieldName]} עודכן בהצלחה!\n\n`;
+        confirmationMessage += `🔍 הנתונים המעודכנים:\n\n`;
+        confirmationMessage += `👤 לקוח: ${data.customerName || 'לא נמצא'}\n`;
+        confirmationMessage += `🛍️ מוצר: ${data.product || 'לא נמצא'}\n`;
+        confirmationMessage += `💰 מחיר: ${data.price ? data.price + '₪' : 'לא נמצא'}\n`;
+        confirmationMessage += `🏠 כתובת: ${data.address || 'לא נמצא'}\n`;
+        confirmationMessage += `📞 טלפון: ${data.phone || 'לא נמצא'}\n\n`;
+        confirmationMessage += `✅ האם הנתונים נכונים?`;
+        
+        const confirmationKeyboard = {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '✅ כן, שמור', callback_data: `confirm_extraction:${chatId}` },
+                        { text: '✏️ ערוך עוד', callback_data: `edit_extraction:${chatId}` }
+                    ],
+                    [
+                        { text: '❌ בטל', callback_data: 'cancel_action' }
+                    ]
+                ]
+            }
+        };
+        
+        // עדכון ההודעה הקיימת
+        if (state.editMessageId) {
+            bot.editMessageText(confirmationMessage, { 
+                chat_id: chatId, 
+                message_id: state.editMessageId,
+                reply_markup: confirmationKeyboard.reply_markup
+            }).catch(e => {
+                // אם העדכון נכשל, שלח הודעה חדשה
+                bot.sendMessage(chatId, confirmationMessage, confirmationKeyboard)
+                    .catch(e2 => console.error('Error sending message:', e2.message));
+            });
+        } else {
+            bot.sendMessage(chatId, confirmationMessage, confirmationKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+        
+        // עדכון מצב המשתמש חזרה לאישור
+        userState[chatId] = {
+            action: 'awaiting_extraction_confirmation',
+            extractedData: state.extractedData,
+            timestamp: Date.now()
+        };
+        
+    } catch (error) {
+        console.error('Error in field edit:', error);
+        bot.sendMessage(chatId, "❌ אירעה שגיאה בעדכון השדה. נסה שוב או בטל את הפעולה.", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+    }
+}
+
 // --- פונקציה לחילוץ נתונים חכם ---
 function handleSmartExtraction(chatId, text) {
     console.log(`Smart extraction for chat ${chatId}: "${text}"`);
@@ -2206,7 +2428,10 @@ function handleSmartExtraction(chatId, text) {
                 inline_keyboard: [
                     [
                         { text: '✅ כן, שמור', callback_data: `confirm_extraction:${chatId}` },
-                        { text: '❌ לא, בטל', callback_data: 'cancel_action' }
+                        { text: '✏️ ערוך', callback_data: `edit_extraction:${chatId}` }
+                    ],
+                    [
+                        { text: '❌ בטל', callback_data: 'cancel_action' }
                     ]
                 ]
             }
