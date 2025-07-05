@@ -425,7 +425,7 @@ bot.on('callback_query', (callbackQuery) => {
                 message += `📞 טלפון: ${extractedData.phone || 'לא צוין'}\n`;
                 message += `📅 תאריך: ${dateStr}\n`;
                 message += `🕐 שעה: ${timeStr}\n\n`;
-                message += `📨 רוצה לשלוח לאיש קשר?`;
+                message += `🚚 רוצה לשלוח לשליח?`;
                 
                 // שמירת מספר הרישום למשלוח לשליח
                 userState[extractionChatId] = {
@@ -449,7 +449,7 @@ bot.on('callback_query', (callbackQuery) => {
                     reply_markup: {
                         inline_keyboard: [
                             [
-                                { text: '📨 שלח לאיש קשר', callback_data: `send_to_courier:${extractionChatId}` },
+                                { text: '🚚 בחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
                                 { text: '✅ סיום', callback_data: 'finish_extraction' }
                             ]
                         ]
@@ -594,11 +594,8 @@ bot.on('callback_query', (callbackQuery) => {
              return;
          }
          
-         // שליפת רשימת השליחים (כולל אנשי קשר)
-         db.all(`SELECT name, chat_id, phone, 'courier' as type FROM couriers 
-                 UNION ALL 
-                 SELECT name, chat_id, phone, 'contact' as type FROM contacts 
-                 ORDER BY name`, (err, allCouriers) => {
+         // שליפת רשימת השליחים (אנשי קשר)
+         db.all(`SELECT name, chat_id, phone FROM contacts ORDER BY name`, (err, couriers) => {
              if (err) {
                  bot.editMessageText("אירעה שגיאה בשליפת רשימת השליחים.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
@@ -606,7 +603,7 @@ bot.on('callback_query', (callbackQuery) => {
                  return;
              }
              
-             if (allCouriers.length === 0) {
+             if (couriers.length === 0) {
                  bot.editMessageText("לא נמצאו שליחים במערכת.", { 
                      chat_id: chatId, 
                      message_id: msg.message_id,
@@ -626,10 +623,9 @@ bot.on('callback_query', (callbackQuery) => {
              
              // יצירת כפתורים לכל השליחים
              const courierButtons = [];
-             allCouriers.forEach(courier => {
-                 const icon = courier.type === 'courier' ? '🚚' : '👥';
+             couriers.forEach(courier => {
                  courierButtons.push([{
-                     text: `${icon} ${courier.name}`,
+                     text: `🚚 ${courier.name}`,
                      callback_data: `select_courier_for_delivery:${courier.name}:${extractionChatId}`
                  }]);
              });
@@ -668,11 +664,8 @@ bot.on('callback_query', (callbackQuery) => {
              return;
          }
          
-         // שליפת פרטי השליח (מטבלת שליחים או אנשי קשר)
-         db.get(`SELECT name, chat_id, phone, 'courier' as type FROM couriers WHERE name = ? 
-                 UNION ALL 
-                 SELECT name, chat_id, phone, 'contact' as type FROM contacts WHERE name = ?`, 
-                 [courierName, courierName], (err, courier) => {
+         // שליפת פרטי השליח (מאנשי קשר)
+         db.get(`SELECT name, chat_id, phone FROM contacts WHERE name = ?`, [courierName], (err, courier) => {
              if (err || !courier) {
                  bot.editMessageText("אירעה שגיאה בשליפת פרטי השליח.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
@@ -690,16 +683,13 @@ bot.on('callback_query', (callbackQuery) => {
              deliveryMessage += `📞 טלפון: ${deliveryData.phone}\n`;
              deliveryMessage += `📅 תאריך: ${deliveryData.date}\n`;
              deliveryMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
-             const roleMessage = courier.type === 'courier' ? '🚚 נשלח אליך כשליח' : '📨 נשלח אליך מהמערכת החכמה';
-             deliveryMessage += roleMessage;
+             deliveryMessage += `🚚 נשלח אליך כשליח`;
              
              // שליחת הודעה לשליח
              bot.sendMessage(courier.chat_id, deliveryMessage)
                  .then(() => {
                      // הודעת אישור למשתמש
-                     const roleText = courier.type === 'courier' ? 'שליח' : 'איש קשר';
-                     const roleIcon = courier.type === 'courier' ? '🚚' : '📨';
-                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה ל${roleText} ${courier.name}!\n\n📝 מספר רישום: #${state.transactionId}\n${roleIcon} ${courier.name} קיבל את כל הפרטים`, { 
+                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה לשליח ${courier.name}!\n\n📝 מספר רישום: #${state.transactionId}\n🚚 ${courier.name} קיבל את כל הפרטים`, { 
                          chat_id: chatId, 
                          message_id: msg.message_id,
                          reply_markup: {
@@ -782,7 +772,7 @@ bot.on('callback_query', (callbackQuery) => {
          message += `📞 טלפון: ${data.phone}\n`;
          message += `📅 תאריך: ${data.date}\n`;
          message += `🕐 שעה: ${data.time}\n\n`;
-         message += `📨 רוצה לשלוח לאיש קשר?`;
+         message += `🚚 רוצה לשלוח לשליח?`;
          
          bot.editMessageText(message, { 
              chat_id: chatId, 
@@ -790,7 +780,7 @@ bot.on('callback_query', (callbackQuery) => {
              reply_markup: {
                  inline_keyboard: [
                      [
-                         { text: '📨 שלח לאיש קשר', callback_data: `send_to_courier:${extractionChatId}` },
+                         { text: '🚚 בחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
                          { text: '✅ סיום', callback_data: 'finish_extraction' }
                      ]
                  ]
@@ -2704,8 +2694,8 @@ function handleNewCourierForDelivery(chatId, text, state) {
     const courierName = parts.slice(0, -1).join(' ');
     const courierPhone = parts[parts.length - 1];
     
-    // הוספת השליח החדש למסד הנתונים
-    db.run(`INSERT INTO couriers (name, chat_id, phone) VALUES (?, ?, ?)`, [courierName, chatId, courierPhone], function(err) {
+    // הוספת השליח החדש למסד הנתונים (לטבלת אנשי קשר)
+    db.run(`INSERT INTO contacts (name, chat_id, phone) VALUES (?, ?, ?)`, [courierName, chatId, courierPhone], function(err) {
         if (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
                 bot.sendMessage(chatId, `השליח '${courierName}' כבר קיים במערכת.`)
