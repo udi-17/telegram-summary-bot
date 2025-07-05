@@ -553,12 +553,12 @@ bot.on('message', (msg) => {
     console.log(`Executing 'התחלה' for chat ID: ${chatId}`);
     const response = "ברוך הבא לבוט הסיכומים וניהול המלאי! \n\n" +
       "כדי לתעד שליחה, פשוט כתוב:\n" +
-      "שם הנמען שם הפריט סכום יעד [תאריך/שעה]\n" +
-      "התאריך והיעד אופציונליים.\n\n" +
+      "שם הנמען שם הפריט סכום כתובת טלפון [תאריך/שעה]\n" +
+      "התאריך אופציונלי.\n\n" +
       "דוגמאות:\n" +
-      "ישראל ישראלי שולחן 500 תל אביב\n" +
-      "משה כהן כיסא 120 חיפה אתמול ב-19:30\n" +
-      "דנה לוי מנורה 250 ראשון לציון 25/07/2024\n\n" +
+      "ישראל ישראלי שולחן 500 תל אביב 050-1234567\n" +
+      "משה כהן כיסא 120 חיפה 052-9876543 אתמול ב-19:30\n" +
+      "דנה לוי מנורה 250 ראשון לציון 054-5555555 25/07/2024\n\n" +
       "הפקודות הזמינות:\n" +
       "יומי - סיכום להיום\n" +
       "יומי [שם] - סיכום יומי לאדם ספציפי\n" +
@@ -1168,7 +1168,7 @@ bot.on('message', (msg) => {
                 }
                 
                 if (!destination) {
-                     bot.sendMessage(chatId, `לא זוהה יעד עבור ${item}. נסה שוב.`, mainMenuKeyboard)
+                     bot.sendMessage(chatId, `לא זוהו פרטי כתובת וטלפון עבור ${item}. נסה שוב.`, mainMenuKeyboard)
                         .catch(e => console.error('Error sending message:', e.message));
                      return;
                 }
@@ -1180,8 +1180,33 @@ bot.on('message', (msg) => {
                     }
                 });
 
-                db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
-                    [recipient, item, amount, destination, timestamp.toISOString()], function(err) {
+                // For backward compatibility, treat destination as combined address+phone
+                // Split destination into address and phone parts
+                const parts = destination.split(/\s+/);
+                let address = '', phone = '';
+                
+                // Look for phone pattern (contains digits and possibly dashes)
+                const phonePattern = /[\d\-\s]{7,}/;
+                let phoneIndex = -1;
+                
+                for (let i = 0; i < parts.length; i++) {
+                    if (phonePattern.test(parts[i])) {
+                        phoneIndex = i;
+                        break;
+                    }
+                }
+                
+                if (phoneIndex > 0) {
+                    address = parts.slice(0, phoneIndex).join(' ');
+                    phone = parts.slice(phoneIndex).join(' ');
+                } else {
+                    // If no phone pattern found, assume last part is phone
+                    address = parts.slice(0, -1).join(' ');
+                    phone = parts[parts.length - 1] || '';
+                }
+
+                db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
+                    [recipient, item, amount, address, phone, timestamp.toISOString()], function(err) {
                     if (err) {
                         bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard)
                             .catch(e => console.error('Error sending message:', e.message));
@@ -1206,7 +1231,8 @@ bot.on('message', (msg) => {
                     message += `👤 נמען: ${recipient}\n`;
                     message += `📦 פריט: ${item}\n`;
                     message += `💰 סכום: ${amount}₪\n`;
-                    message += `📍 יעד: ${destination}\n`;
+                    message += `🏠 כתובת: ${address}\n`;
+                    message += `📞 טלפון: ${phone}\n`;
                     message += `📅 תאריך: ${dateStr}\n`;
                     message += `🕐 שעה: ${timeStr}`;
                     
@@ -1215,7 +1241,7 @@ bot.on('message', (msg) => {
                 });
 
             } else {
-                bot.sendMessage(chatId, "לא הבנתי את הפקודה. אם ניסית לרשום שליחות, ודא שהיא בפורמט: שם פריט סכום יעד", mainMenuKeyboard)
+                bot.sendMessage(chatId, "לא הבנתי את הפקודה. אם ניסית לרשום שליחות, ודא שהיא בפורמט: שם פריט סכום כתובת טלפון", mainMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
             }
         } else {
@@ -1510,7 +1536,7 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
         return;
     }
     
-    let query = `SELECT id, recipient, item, amount, destination, timestamp FROM transactions WHERE timestamp >= ? AND timestamp <= ?`;
+    let query = `SELECT id, recipient, item, amount, address, phone, timestamp FROM transactions WHERE timestamp >= ? AND timestamp <= ?`;
     const params = [startDate.toISOString(), endDate.toISOString()];
 
     if (recipientName) {
@@ -1553,7 +1579,13 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
                     hour: '2-digit',
                     minute: '2-digit'
                 });
-                summaryText += `👤 *${row.recipient}* | 📦 ${row.item} | 💰 ${row.amount}₪ | 📍 ${row.destination || 'לא צוין'} | 📅 ${dateStr} ${timeStr}\n`;
+                
+                let locationInfo = '';
+                if (row.address || row.phone) {
+                    locationInfo = ` | 🏠 ${row.address || 'לא צוין'} | 📞 ${row.phone || 'לא צוין'}`;
+                }
+                
+                summaryText += `👤 *${row.recipient}* | 📦 ${row.item} | 💰 ${row.amount}₪${locationInfo} | 📅 ${dateStr} ${timeStr}\n`;
             });
             summaryText += `\n*סה"כ: ${rows.length} שליחויות בסכום כולל של ${totalAmount.toFixed(2)}₪*`;
         }
@@ -1825,8 +1857,8 @@ function handleNewContactDelivery(chatId, text) {
         }
 
         // Then, add the transaction
-        db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
-            [recipient, item, amount, destination, timestamp.toISOString()], function(transactionErr) {
+        db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
+            [recipient, item, amount, address, phone, timestamp.toISOString()], function(transactionErr) {
             if (transactionErr) {
                 bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", contactsMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
@@ -1851,7 +1883,8 @@ function handleNewContactDelivery(chatId, text) {
                 message += `👤 נמען: ${recipient}\n`;
                 message += `📦 פריט: ${item}\n`;
                 message += `💰 סכום: ${amount}₪\n`;
-                message += `📍 יעד: ${destination}\n`;
+                message += `🏠 כתובת: ${address}\n`;
+                message += `📞 טלפון: ${phone}\n`;
                 message += `📅 תאריך: ${dateStr}\n`;
                 message += `🕐 שעה: ${timeStr}\n\n`;
                 
