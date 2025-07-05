@@ -595,13 +595,15 @@ bot.on('callback_query', (callbackQuery) => {
          }
          
          // שליפת רשימת השליחים (אנשי קשר)
+         console.log('Fetching couriers from contacts table...');
          db.all(`SELECT name, chat_id, phone FROM contacts ORDER BY name`, (err, couriers) => {
              if (err) {
+                 console.error('Database error when fetching couriers:', err.message);
                  bot.editMessageText("אירעה שגיאה בשליפת רשימת השליחים.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
-                 console.error('Database error:', err.message);
                  return;
              }
+             console.log('Fetched couriers:', couriers.length, 'found');
              
              if (couriers.length === 0) {
                  bot.editMessageText("לא נמצאו שליחים במערכת.", { 
