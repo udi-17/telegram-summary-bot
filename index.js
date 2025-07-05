@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const sqlite3 = require('sqlite3').verbose();
 const cron = require('node-cron');
 const chrono = require('chrono-node');
+const SmartDeliveryParser = require('./smart-parser');
 
 // --- הגדרות ראשוניות ---
 const token = process.env.TELEGRAM_BOT_TOKEN || '7268100196:AAFYa_ejke6SRkhLRlF-HodxIyLW5xrk02E';
@@ -114,6 +115,9 @@ const initializeDatabaseAndStartServices = () => {
 
 console.log('Bot has been started...');
 
+// --- יצירת מפענח חכם ---
+const smartParser = new SmartDeliveryParser();
+
 // --- מעקב אחר מצב המשתמש ---
 const userState = {};
 
@@ -135,8 +139,8 @@ setInterval(cleanupUserStates, 10 * 60 * 1000);
 const mainMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
-            [{ text: 'שבועי' }, { text: 'חודשי' }],
+            [{ text: 'שליחות חדשה' }, { text: 'חילוץ חכם' }],
+            [{ text: 'יומי' }, { text: 'שבועי' }],
             [{ text: 'שליח' }, { text: 'לקוחות' }],
             [{ text: 'ניהול מלאי' }, { text: 'התחלה' }]
         ],
@@ -330,6 +334,70 @@ bot.on('callback_query', (callbackQuery) => {
         });
         return;
     }
+
+    if (data.startsWith('confirm_extraction:')) {
+        const extractionChatId = data.substring('confirm_extraction:'.length);
+        const state = userState[extractionChatId];
+        
+        if (!state || state.action !== 'awaiting_extraction_confirmation') {
+            bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
+                .catch(e => console.error('Error editing message:', e.message));
+            return;
+        }
+        
+        const data = state.extractedData;
+        const timestamp = new Date();
+        
+        // הוספת הלקוח לרשימת אנשי הקשר אם לא קיים
+        db.run(`INSERT OR IGNORE INTO contacts (name) VALUES (?)`, [data.customerName], (err) => {
+            if (err) {
+                console.error('Error auto-adding contact:', err.message);
+            }
+        });
+        
+        // שמירת השליחות
+        db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
+            [data.customerName, data.product, data.price, data.address || '', data.phone || '', timestamp.toISOString()], 
+            function(err) {
+                if (err) {
+                    bot.editMessageText("אירעה שגיאה בשמירת הנתונים.", { chat_id: chatId, message_id: msg.message_id })
+                        .catch(e => console.error('Error editing message:', e.message));
+                    console.error('Database error:', err.message);
+                    delete userState[extractionChatId];
+                    return;
+                }
+                
+                // המרה לזמן ישראלי
+                const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                const dateStr = israelTime.toLocaleDateString('he-IL', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                let message = `✅ שליחות נרשמה בהצלחה מחילוץ חכם!\n\n`;
+                message += `📝 מספר רישום: #${this.lastID}\n`;
+                message += `👤 נמען: ${data.customerName}\n`;
+                message += `🛍️ מוצר: ${data.product}\n`;
+                message += `💰 סכום: ${data.price}₪\n`;
+                message += `🏠 כתובת: ${data.address || 'לא צוין'}\n`;
+                message += `📞 טלפון: ${data.phone || 'לא צוין'}\n`;
+                message += `📅 תאריך: ${dateStr}\n`;
+                message += `🕐 שעה: ${timeStr}`;
+                
+                bot.editMessageText(message, { chat_id: chatId, message_id: msg.message_id })
+                    .catch(e => console.error('Error editing message:', e.message));
+                
+                delete userState[extractionChatId];
+            });
+        return;
+    }
 });
 
 // --- טיפול בשגיאות בוט ---
@@ -509,6 +577,12 @@ bot.on('message', (msg) => {
 
   if (state && state.action === 'awaiting_search_query') {
     handleInventorySearch(chatId, text);
+    return;
+  }
+
+  // --- טיפול במצב המשתמש (חילוץ חכם) ---
+  if (state && state.action === 'awaiting_smart_extraction') {
+    handleSmartExtraction(chatId, text);
     return;
   }
 
@@ -935,6 +1009,16 @@ bot.on('message', (msg) => {
         bot.sendMessage(chatId, "לאיזה לקוח השליחות? בחר מהרשימה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
             .catch(e => console.error('Error sending message:', e.message));
     });
+
+  } else if (command === 'חילוץ חכם') {
+    console.log(`Executing 'חילוץ חכם' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "🤖 מצב חילוץ נתונים חכם הופעל!\n\n📝 העתק הודעה עם לקוח שמכילה:\n• שם הלקוח\n• מוצר\n• מחיר\n• כתובת\n• טלפון\n\nדוגמה: \"שלום דני, המנורה עולה 250₪, הכתובת שלך תל אביב רחוב הרצל 15, הטלפון 050-1234567\"\n\n✅ הבוט יחלץ את הנתונים אוטומטית ויציע לך לאשר אותם!")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_smart_extraction',
+        timestamp: Date.now()
+    };
 
   } else if (command === 'שליחות חדשה') {
     console.log(`Executing 'שליחות חדשה' for chat ID: ${chatId}`);
@@ -2081,6 +2165,69 @@ function showCustomersForDeletion(chatId) {
         bot.sendMessage(chatId, "⚠️ בחר לקוח למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
             .catch(e => console.error('Error sending message:', e.message));
     });
+}
+
+// --- פונקציה לחילוץ נתונים חכם ---
+function handleSmartExtraction(chatId, text) {
+    console.log(`Smart extraction for chat ${chatId}: "${text}"`);
+    
+    try {
+        const extractedData = smartParser.parseMessage(text);
+        
+        // בדיקה אם יש מספיק נתונים
+        const requiredFields = ['product', 'customerName', 'price'];
+        const missingFields = requiredFields.filter(field => !extractedData[field]);
+        
+        if (missingFields.length > 0) {
+            bot.sendMessage(chatId, `❌ לא הצלחתי לחלץ את כל הנתונים הנדרשים.\n\nחסרים: ${missingFields.map(f => {
+                switch(f) {
+                    case 'product': return 'מוצר';
+                    case 'customerName': return 'שם לקוח';
+                    case 'price': return 'מחיר';
+                    default: return f;
+                }
+            }).join(', ')}\n\nנסה שוב עם הודעה יותר מפורטת או השתמש ב'שליחות חדשה' למילוי ידני.`, mainMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            delete userState[chatId];
+            return;
+        }
+        
+        // הצגת הנתונים שחולצו לאישור
+        let confirmationMessage = `🔍 הנתונים שחולצו מההודעה:\n\n`;
+        confirmationMessage += `👤 לקוח: ${extractedData.customerName}\n`;
+        confirmationMessage += `🛍️ מוצר: ${extractedData.product}\n`;
+        confirmationMessage += `💰 מחיר: ${extractedData.price}₪\n`;
+        confirmationMessage += `🏠 כתובת: ${extractedData.address || 'לא נמצא'}\n`;
+        confirmationMessage += `📞 טלפון: ${extractedData.phone || 'לא נמצא'}\n\n`;
+        confirmationMessage += `✅ האם הנתונים נכונים?`;
+        
+        const confirmationKeyboard = {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '✅ כן, שמור', callback_data: `confirm_extraction:${chatId}` },
+                        { text: '❌ לא, בטל', callback_data: 'cancel_action' }
+                    ]
+                ]
+            }
+        };
+        
+        // שמירת הנתונים החלוצים למצב המשתמש
+        userState[chatId] = {
+            action: 'awaiting_extraction_confirmation',
+            extractedData: extractedData,
+            timestamp: Date.now()
+        };
+        
+        bot.sendMessage(chatId, confirmationMessage, confirmationKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+            
+    } catch (error) {
+        console.error('Error in smart extraction:', error);
+        bot.sendMessage(chatId, "❌ אירעה שגיאה בחילוץ הנתונים. נסה שוב או השתמש ב'שליחות חדשה'.", mainMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+    }
 }
 
  
