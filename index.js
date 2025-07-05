@@ -857,6 +857,7 @@ bot.on('callback_query', (callbackQuery) => {
 
      if (data === 'back_to_contacts_list') {
          // חזרה לרשימת השליחים
+         console.log(`Handling back_to_contacts_list for chat ID: ${chatId}`);
          db.all("SELECT * FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
              if (err) {
                  bot.editMessageText("שגיאה בשליפת השליחים.", { chat_id: chatId, message_id: msg.message_id })
@@ -951,6 +952,7 @@ bot.on('callback_query', (callbackQuery) => {
 
      if (data === 'back_to_customers_list') {
          // חזרה לרשימת הלקוחות
+         console.log(`Handling back_to_customers_list for chat ID: ${chatId}`);
          db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
              if (err) {
                  bot.editMessageText("שגיאה בשליפת הלקוחות.", { chat_id: chatId, message_id: msg.message_id })
