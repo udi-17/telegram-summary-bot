@@ -978,13 +978,15 @@ bot.on('message', (msg) => {
             return;
         }
         
-        // Check for contact button press
-        const contactMatch = contacts.find(c => c.name.toLowerCase() === text.toLowerCase());
-        if (contactMatch) {
-            const farPast = new Date(0); 
-            const now = new Date();
-            generateSummary(chatId, `כללי`, farPast, now, contactMatch.name);
-            return;
+        // Check for contact button press (רק אם זה לא פקודת "מצא")
+        if (!text.startsWith('מצא ')) {
+            const contactMatch = contacts.find(c => c.name.toLowerCase() === text.toLowerCase());
+            if (contactMatch) {
+                const farPast = new Date(0); 
+                const now = new Date();
+                generateSummary(chatId, `כללי`, farPast, now, contactMatch.name);
+                return;
+            }
         }
 
         // Check for free text delivery (existing logic)
