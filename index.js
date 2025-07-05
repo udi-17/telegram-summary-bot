@@ -859,7 +859,7 @@ bot.on('message', (msg) => {
   // --- פקודות ניהול לקוחות ---
   } else if (command === 'הוסף לקוח חדש') {
     console.log(`Executing 'הוסף לקוח חדש' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח פרטי הלקוח החדש בפורמט:\nשם [טלפון] [אימייל] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי 050-1234567 israel@email.com תל אביב לקוח VIP")
+    bot.sendMessage(chatId, "שלח פרטי הלקוח החדש בפורמט:\nשם [טלפון] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי 050-1234567 תל אביב לקוח VIP")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -869,7 +869,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'חפש לקוח') {
     console.log(`Executing 'חפש לקוח' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם או חלק משם הלקוח לחיפוש:")
+    bot.sendMessage(chatId, "שלח שם או טלפון הלקוח לחיפוש:")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -883,7 +883,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'עדכן פרטי לקוח') {
     console.log(`Executing 'עדכן פרטי לקוח' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח שם הלקוח ופרטים חדשים בפורמט:\nשם קיים | שם חדש [טלפון] [אימייל] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי | ישראל כהן 050-9876543")
+    bot.sendMessage(chatId, "שלח שם הלקוח ופרטים חדשים בפורמט:\nשם קיים | שם חדש [טלפון] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי | ישראל כהן 050-9876543 חיפה")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -1849,9 +1849,8 @@ function handleNewCustomerAddition(chatId, text) {
 
     const name = parts[0];
     const phone = parts.length > 1 ? parts[1] : '';
-    const email = parts.length > 2 ? parts[2] : '';
-    const address = parts.length > 3 ? parts[3] : '';
-    const notes = parts.length > 4 ? parts.slice(4).join(' ') : '';
+    const address = parts.length > 2 ? parts[2] : '';
+    const notes = parts.length > 3 ? parts.slice(3).join(' ') : '';
     
     // וולידציה של השם
     if (name.length < 2) {
@@ -1872,7 +1871,7 @@ function handleNewCustomerAddition(chatId, text) {
     
     console.log(`Adding new customer '${name}' for chat ID: ${chatId}`);
     db.run(`INSERT INTO customers (name, phone, email, address, notes, created_at, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-        [name, phone, email, address, notes, now, now], function(err) {
+        [name, phone, '', address, notes, now, now], function(err) {
         if (err) {
             if (err.code === 'SQLITE_CONSTRAINT') {
                 bot.sendMessage(chatId, `הלקוח '${name}' כבר קיים ברשימת הלקוחות.`, customersMenuKeyboard)
@@ -1886,7 +1885,6 @@ function handleNewCustomerAddition(chatId, text) {
             let message = `✅ הלקוח נוסף בהצלחה!\n\n`;
             message += `👤 שם: ${name}\n`;
             message += `📞 טלפון: ${phone || 'לא צוין'}\n`;
-            message += `📧 אימייל: ${email || 'לא צוין'}\n`;
             message += `🏠 כתובת: ${address || 'לא צוין'}\n`;
             message += `📝 הערות: ${notes || 'לא צוין'}`;
             
@@ -1898,10 +1896,10 @@ function handleNewCustomerAddition(chatId, text) {
 }
 
 function handleCustomerSearch(chatId, searchQuery) {
-    const query = `SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name COLLATE NOCASE`;
+    const query = `SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? ORDER BY name COLLATE NOCASE`;
     const searchPattern = `%${searchQuery}%`;
     
-    db.all(query, [searchPattern, searchPattern, searchPattern], (err, rows) => {
+    db.all(query, [searchPattern, searchPattern], (err, rows) => {
         if (err) {
             bot.sendMessage(chatId, "אירעה שגיאה בחיפוש.", customersMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
@@ -1915,7 +1913,6 @@ function handleCustomerSearch(chatId, searchQuery) {
             rows.forEach((customer, index) => {
                 message += `${index + 1}. 👤 ${customer.name}\n`;
                 if (customer.phone) message += `📞 ${customer.phone}\n`;
-                if (customer.email) message += `📧 ${customer.email}\n`;
                 if (customer.address) message += `🏠 ${customer.address}\n`;
                 if (customer.notes) message += `📝 ${customer.notes}\n`;
                 message += `\n`;
@@ -1967,14 +1964,13 @@ function handleCustomerUpdate(chatId, text) {
     
     const newName = parts[0] || oldName;
     const phone = parts.length > 1 ? parts[1] : '';
-    const email = parts.length > 2 ? parts[2] : '';
-    const address = parts.length > 3 ? parts[3] : '';
-    const notes = parts.length > 4 ? parts.slice(4).join(' ') : '';
+    const address = parts.length > 2 ? parts[2] : '';
+    const notes = parts.length > 3 ? parts.slice(3).join(' ') : '';
     
     const now = new Date().toISOString();
     
     db.run(`UPDATE customers SET name = ?, phone = ?, email = ?, address = ?, notes = ?, last_updated = ? WHERE name = ? COLLATE NOCASE`, 
-        [newName, phone, email, address, notes, now, oldName], function(err) {
+        [newName, phone, '', address, notes, now, oldName], function(err) {
         if (err) {
             bot.sendMessage(chatId, "אירעה שגיאה בעדכון פרטי הלקוח.", customersMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
@@ -1986,7 +1982,6 @@ function handleCustomerUpdate(chatId, text) {
             let message = `✅ פרטי הלקוח עודכנו בהצלחה!\n\n`;
             message += `👤 שם: ${newName}\n`;
             message += `📞 טלפון: ${phone || 'לא צוין'}\n`;
-            message += `📧 אימייל: ${email || 'לא צוין'}\n`;
             message += `🏠 כתובת: ${address || 'לא צוין'}\n`;
             message += `📝 הערות: ${notes || 'לא צוין'}`;
             
