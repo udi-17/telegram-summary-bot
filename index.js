@@ -52,6 +52,21 @@ const initializeDatabaseAndStartServices = () => {
                 console.error('Error creating subscriptions table:', err.message);
             }
         });
+        
+        db.run(`CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 0,
+            price REAL,
+            category TEXT,
+            description TEXT,
+            last_updated TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating inventory table:', err.message);
+            }
+        });
 
         // Add destination column for backwards compatibility - safe to run multiple times
         db.run('ALTER TABLE transactions ADD COLUMN destination TEXT', (err) => {
@@ -94,7 +109,8 @@ const mainMenuKeyboard = {
         keyboard: [
             [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
             [{ text: 'שבועי' }, { text: 'חודשי' }],
-            [{ text: 'אנשי קשר' }, { text: 'התחלה' }]
+            [{ text: 'אנשי קשר' }, { text: 'התחלה' }],
+            [{ text: 'ניהול מלאי' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -140,6 +156,20 @@ const monthlyMenuKeyboard = {
 
 const hebrewMonths = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 
+// --- תפריט ניהול מלאי ---
+const inventoryMenuKeyboard = {
+    reply_markup: {
+        keyboard: [
+            [{ text: 'הוסף פריט למלאי' }, { text: 'הצג מלאי' }],
+            [{ text: 'עדכן כמות' }, { text: 'מחק פריט' }],
+            [{ text: 'חפש במלאי' }, { text: 'דו״ח מלאי' }],
+            [{ text: 'חזור' }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
+    }
+};
+
 // --- טיפול בכפתורים (Callback Queries) ---
 bot.on('callback_query', (callbackQuery) => {
     const msg = callbackQuery.message;
@@ -170,6 +200,26 @@ bot.on('callback_query', (callbackQuery) => {
             const message = this.changes > 0 ? 
                 `'${contactName}' נמחק בהצלחה מספר הכתובות.` :
                 `'${contactName}' לא נמצא למחיקה.`;
+            
+            bot.editMessageText(message, { chat_id: chatId, message_id: msg.message_id })
+                .catch(e => console.error('Error editing message:', e.message));
+        });
+        return;
+    }
+
+    if (data.startsWith('delete_inventory:')) {
+        const itemName = data.substring('delete_inventory:'.length);
+
+        db.run(`DELETE FROM inventory WHERE item_name = ?`, [itemName], function(err) {
+            if (err) {
+                bot.editMessageText("אירעה שגיאה במחיקת הפריט מהמלאי.", { chat_id: chatId, message_id: msg.message_id })
+                    .catch(e => console.error('Error editing message:', e.message));
+                console.error('Database error:', err.message);
+                return;
+            }
+            const message = this.changes > 0 ? 
+                `הפריט '${itemName}' נמחק בהצלחה מהמלאי.` :
+                `הפריט '${itemName}' לא נמצא במלאי.`;
             
             bot.editMessageText(message, { chat_id: chatId, message_id: msg.message_id })
                 .catch(e => console.error('Error editing message:', e.message));
@@ -287,6 +337,22 @@ bot.on('message', (msg) => {
     }
     return;
   }
+
+  // --- טיפול במצב המשתמש (לניהול מלאי) ---
+  if (state && state.action === 'awaiting_inventory_item') {
+    handleInventoryItemAddition(chatId, text);
+    return;
+  }
+
+  if (state && state.action === 'awaiting_quantity_update') {
+    handleQuantityUpdate(chatId, text);
+    return;
+  }
+
+  if (state && state.action === 'awaiting_search_query') {
+    handleInventorySearch(chatId, text);
+    return;
+  }
   
   // --- נתב פקודות ראשי ---
   let command = text.toLowerCase().trim();
@@ -298,7 +364,7 @@ bot.on('message', (msg) => {
 
   if (command === 'התחלה') {
     console.log(`Executing 'התחלה' for chat ID: ${chatId}`);
-    const response = "ברוך הבא לבוט הסיכומים! \n\n" +
+    const response = "ברוך הבא לבוט הסיכומים וניהול המלאי! \n\n" +
       "כדי לתעד שליחה, פשוט כתוב:\n" +
       "שם הנמען שם הפריט סכום יעד [תאריך/שעה]\n" +
       "התאריך והיעד אופציונליים.\n\n" +
@@ -317,6 +383,9 @@ bot.on('message', (msg) => {
       "סיכום [תאריך] [שם] - סיכום ליום ספציפי (אפשר גם בלי שם)\n\n" +
       "ניהול אנשי קשר:\n" +
       "אנשי קשר\nהוסף איש קשר [שם]\nמחק איש קשר\nשליחות חדשה\n\n" +
+      "ניהול מלאי:\n" +
+      "ניהול מלאי - תפריט ניהול המלאי\n" +
+      "הוסף פריט למלאי\nהצג מלאי\nעדכן כמות\nחפש במלאי\nדו״ח מלאי\n\n" +
       "סיכומים אוטומטיים:\n" +
       "הרשמה\nביטול הרשמה";
     bot.sendMessage(chatId, response, mainMenuKeyboard)
@@ -568,6 +637,53 @@ bot.on('message', (msg) => {
         bot.sendMessage(chatId, `איש הקשר '${name}' נוסף בהצלחה.`, mainMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
     });
+
+  } else if (command === 'ניהול מלאי') {
+    console.log(`Executing 'ניהול מלאי' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "בחר פעולה לניהול המלאי:", inventoryMenuKeyboard)
+        .catch(err => console.error('Error sending message:', err.message));
+
+  } else if (command === 'הוסף פריט למלאי') {
+    console.log(`Executing 'הוסף פריט למלאי' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח פרטי הפריט בפורמט:\nשם הפריט כמות מחיר [קטגוריה] [תיאור]\n\nדוגמה: שולחן 5 500 רהיטים שולחן עץ מלא")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_inventory_item',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'הצג מלאי') {
+    console.log(`Executing 'הצג מלאי' for chat ID: ${chatId}`);
+    displayInventory(chatId);
+
+  } else if (command === 'עדכן כמות') {
+    console.log(`Executing 'עדכן כמות' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם הפריט והכמות החדשה:\nשם הפריט כמות חדשה\n\nדוגמה: שולחן 10")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_quantity_update',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'מחק פריט') {
+    console.log(`Executing 'מחק פריט' for chat ID: ${chatId}`);
+    showInventoryForDeletion(chatId);
+
+  } else if (command === 'חפש במלאי') {
+    console.log(`Executing 'חפש במלאי' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם הפריט או חלק משמו לחיפוש:")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_search_query',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'דו״ח מלאי') {
+    console.log(`Executing 'דו״ח מלאי' for chat ID: ${chatId}`);
+    generateInventoryReport(chatId);
 
   } else if (command === 'מחק איש קשר') {
     console.log(`Executing 'מחק איש קשר' for chat ID: ${chatId}`);
@@ -934,6 +1050,318 @@ const scheduleTasks = () => {
 };
 
 console.log("Script execution finished. Bot is now polling for messages."); 
+
+// --- פונקציות ניהול מלאי ---
+function handleInventoryItemAddition(chatId, text) {
+    const parts = text.split(/\s+/);
+    
+    if (parts.length < 3) {
+        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם פריט, כמות ומחיר.", inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    // Find the quantity (first number)
+    let quantityIndex = -1;
+    for (let i = 1; i < parts.length; i++) {
+        if (isValidNumber(parts[i])) {
+            quantityIndex = i;
+            break;
+        }
+    }
+
+    if (quantityIndex === -1) {
+        bot.sendMessage(chatId, "לא נמצאה כמות תקינה.", inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    // Find the price (second number)
+    let priceIndex = -1;
+    for (let i = quantityIndex + 1; i < parts.length; i++) {
+        if (isValidNumber(parts[i])) {
+            priceIndex = i;
+            break;
+        }
+    }
+
+    if (priceIndex === -1) {
+        bot.sendMessage(chatId, "לא נמצא מחיר תקין.", inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    const itemName = parts.slice(0, quantityIndex).join(' ');
+    const quantity = parseInt(parts[quantityIndex]);
+    const price = parseFloat(parts[priceIndex]);
+    const category = parts.length > priceIndex + 1 ? parts[priceIndex + 1] : '';
+    const description = parts.length > priceIndex + 2 ? parts.slice(priceIndex + 2).join(' ') : '';
+    
+    const now = new Date().toISOString();
+
+    db.run(`INSERT INTO inventory (item_name, quantity, price, category, description, last_updated, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+        [itemName, quantity, price, category, description, now, now], function(err) {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בהוספת הפריט למלאי.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+        } else {
+            const message = `✅ הפריט נוסף בהצלחה למלאי!\n\n` +
+                `📦 שם: ${itemName}\n` +
+                `🔢 כמות: ${quantity}\n` +
+                `💰 מחיר: ${price}₪\n` +
+                `📂 קטגוריה: ${category || 'לא צוין'}\n` +
+                `📝 תיאור: ${description || 'לא צוין'}`;
+            
+            bot.sendMessage(chatId, message, inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+        delete userState[chatId];
+    });
+}
+
+function handleQuantityUpdate(chatId, text) {
+    const parts = text.split(/\s+/);
+    
+    if (parts.length < 2) {
+        bot.sendMessage(chatId, "פורמט שגוי. שלח: שם הפריט כמות חדשה", inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    let quantityIndex = -1;
+    for (let i = 1; i < parts.length; i++) {
+        if (isValidNumber(parts[i])) {
+            quantityIndex = i;
+            break;
+        }
+    }
+
+    if (quantityIndex === -1) {
+        bot.sendMessage(chatId, "לא נמצאה כמות תקינה.", inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    const itemName = parts.slice(0, quantityIndex).join(' ');
+    const newQuantity = parseInt(parts[quantityIndex]);
+    const now = new Date().toISOString();
+
+    db.run(`UPDATE inventory SET quantity = ?, last_updated = ? WHERE item_name = ? COLLATE NOCASE`, 
+        [newQuantity, now, itemName], function(err) {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בעדכון הכמות.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+        } else if (this.changes === 0) {
+            bot.sendMessage(chatId, `הפריט "${itemName}" לא נמצא במלאי.`, inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        } else {
+            bot.sendMessage(chatId, `✅ הכמות של "${itemName}" עודכנה ל-${newQuantity} יחידות.`, inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+        delete userState[chatId];
+    });
+}
+
+function handleInventorySearch(chatId, searchQuery) {
+    const query = `SELECT * FROM inventory WHERE item_name LIKE ? OR description LIKE ? OR category LIKE ? ORDER BY item_name`;
+    const searchPattern = `%${searchQuery}%`;
+    
+    db.all(query, [searchPattern, searchPattern, searchPattern], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בחיפוש.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+        } else if (rows.length === 0) {
+            bot.sendMessage(chatId, `לא נמצאו פריטים התואמים לחיפוש "${searchQuery}".`, inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        } else {
+            let message = `🔍 תוצאות חיפוש עבור "${searchQuery}":\n\n`;
+            
+            rows.forEach(item => {
+                message += `📦 ${item.item_name}\n`;
+                message += `🔢 כמות: ${item.quantity}\n`;
+                message += `💰 מחיר: ${item.price}₪\n`;
+                message += `📂 קטגוריה: ${item.category || 'לא צוין'}\n`;
+                if (item.description) {
+                    message += `📝 תיאור: ${item.description}\n`;
+                }
+                message += `\n`;
+            });
+            
+            if (message.length > 4000) {
+                const parts = [];
+                let currentPart = '';
+                const lines = message.split('\n');
+                
+                for (const line of lines) {
+                    if (currentPart.length + line.length > 4000) {
+                        parts.push(currentPart);
+                        currentPart = line + '\n';
+                    } else {
+                        currentPart += line + '\n';
+                    }
+                }
+                if (currentPart) parts.push(currentPart);
+                
+                parts.forEach((part, index) => {
+                    setTimeout(() => {
+                        const options = index === parts.length - 1 ? inventoryMenuKeyboard : {};
+                        bot.sendMessage(chatId, part, options)
+                            .catch(e => console.error('Error sending message:', e.message));
+                    }, index * 100);
+                });
+            } else {
+                bot.sendMessage(chatId, message, inventoryMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+            }
+        }
+        delete userState[chatId];
+    });
+}
+
+function displayInventory(chatId) {
+    const query = `SELECT * FROM inventory ORDER BY category, item_name`;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בשליפת המלאי.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        let message = '📦 רשימת מלאי מלאה:\n\n';
+        let currentCategory = '';
+        
+        rows.forEach(item => {
+            if (item.category !== currentCategory) {
+                currentCategory = item.category || 'ללא קטגוריה';
+                message += `📂 ${currentCategory}:\n`;
+            }
+            
+            message += `▪️ ${item.item_name} - כמות: ${item.quantity}, מחיר: ${item.price}₪\n`;
+        });
+        
+        if (message.length > 4000) {
+            const parts = [];
+            let currentPart = '';
+            const lines = message.split('\n');
+            
+            for (const line of lines) {
+                if (currentPart.length + line.length > 4000) {
+                    parts.push(currentPart);
+                    currentPart = line + '\n';
+                } else {
+                    currentPart += line + '\n';
+                }
+            }
+            if (currentPart) parts.push(currentPart);
+            
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    const options = index === parts.length - 1 ? inventoryMenuKeyboard : {};
+                    bot.sendMessage(chatId, part, options)
+                        .catch(e => console.error('Error sending message:', e.message));
+                }, index * 100);
+            });
+        } else {
+            bot.sendMessage(chatId, message, inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+    });
+}
+
+function showInventoryForDeletion(chatId) {
+    const query = `SELECT item_name FROM inventory ORDER BY item_name`;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בשליפת המלאי.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק, אין מה למחוק.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.item_name}`, callback_data: `delete_inventory:${row.item_name}` }]);
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        
+        bot.sendMessage(chatId, "בחר פריט למחיקה מהמלאי:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+            .catch(e => console.error('Error sending message:', e.message));
+    });
+}
+
+function generateInventoryReport(chatId) {
+    const query = `SELECT 
+        COUNT(*) as total_items,
+        SUM(quantity) as total_quantity,
+        SUM(quantity * price) as total_value,
+        category,
+        COUNT(*) as items_in_category
+        FROM inventory 
+        GROUP BY category
+        ORDER BY category`;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה ביצירת הדו״ח.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "המלאי ריק, אין נתונים לדו״ח.", inventoryMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        let totalItems = 0;
+        let totalQuantity = 0;
+        let totalValue = 0;
+        
+        let message = '📊 דו״ח מלאי מפורט:\n\n';
+        
+        rows.forEach(row => {
+            const category = row.category || 'ללא קטגוריה';
+            message += `📂 ${category}:\n`;
+            message += `▪️ מספר פריטים: ${row.items_in_category}\n`;
+            message += `▪️ כמות כוללת: ${row.total_quantity}\n`;
+            message += `▪️ ערך כולל: ${row.total_value?.toFixed(2) || 0}₪\n\n`;
+            
+            totalItems += row.items_in_category;
+            totalQuantity += row.total_quantity;
+            totalValue += row.total_value || 0;
+        });
+        
+        message += `📈 סיכום כללי:\n`;
+        message += `🔢 סה״כ פריטים שונים: ${totalItems}\n`;
+        message += `📦 סה״כ יחידות במלאי: ${totalQuantity}\n`;
+        message += `💰 ערך כולל של המלאי: ${totalValue.toFixed(2)}₪`;
+        
+        bot.sendMessage(chatId, message, inventoryMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+    });
+}
 
 function generateSummary(chatId, period, startDate, endDate, recipientName = null) {
     // וולידציה של פרמטרים
