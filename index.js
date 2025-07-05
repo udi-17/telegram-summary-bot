@@ -73,6 +73,24 @@ const initializeDatabaseAndStartServices = () => {
             }
         });
 
+        // יצירת טבלת לקוחות
+        db.run(`CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            phone TEXT,
+            email TEXT,
+            address TEXT,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            last_updated TEXT NOT NULL
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating customers table:', err.message);
+            } else {
+                console.log('Customers table ready.');
+            }
+        });
+
         // Add destination column for backwards compatibility - safe to run multiple times
         db.run('ALTER TABLE transactions ADD COLUMN destination TEXT', (err) => {
             if (err && err.message.includes('duplicate column name')) {
@@ -114,8 +132,8 @@ const mainMenuKeyboard = {
         keyboard: [
             [{ text: 'שליחות חדשה' }, { text: 'יומי' }],
             [{ text: 'שבועי' }, { text: 'חודשי' }],
-            [{ text: 'אנשי קשר' }, { text: 'התחלה' }],
-            [{ text: 'ניהול מלאי' }]
+            [{ text: 'אנשי קשר' }, { text: 'לקוחות' }],
+            [{ text: 'ניהול מלאי' }, { text: 'התחלה' }]
         ],
         resize_keyboard: true,
         one_time_keyboard: false
@@ -183,6 +201,21 @@ const contactsMenuKeyboard = {
             [{ text: 'חפש איש קשר' }, { text: 'מחק איש קשר' }],
             [{ text: 'ייבא אנשי קשר' }, { text: 'ייצא אנשי קשר' }],
             [{ text: 'שליחות לאיש קשר חדש' }],
+            [{ text: 'חזור' }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true
+    }
+};
+
+// --- תפריט ניהול לקוחות ---
+const customersMenuKeyboard = {
+    reply_markup: {
+        keyboard: [
+            [{ text: 'הוסף לקוח חדש' }, { text: 'הצג לקוחות' }],
+            [{ text: 'חפש לקוח' }, { text: 'מחק לקוח' }],
+            [{ text: 'עדכן פרטי לקוח' }, { text: 'דוח לקוחות' }],
+            [{ text: 'שליחות ללקוח' }],
             [{ text: 'חזור' }]
         ],
         resize_keyboard: true,
@@ -259,6 +292,41 @@ bot.on('callback_query', (callbackQuery) => {
             recipient: recipientName,
             timestamp: Date.now()
         };
+        return;
+    }
+
+    if (data.startsWith('customer_delivery:')) {
+        const customerName = data.substring('customer_delivery:'.length);
+        bot.editMessageText(`נבחר לקוח: ${customerName}.`, { chat_id: chatId, message_id: msg.message_id })
+            .catch(err => console.error('Error editing message:', err.message));
+        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום יעד")
+            .catch(err => console.error('Error sending message:', err.message));
+        
+        userState[chatId] = {
+            action: 'awaiting_delivery_details',
+            recipient: customerName,
+            timestamp: Date.now()
+        };
+        return;
+    }
+
+    if (data.startsWith('delete_customer:')) {
+        const customerName = data.substring('delete_customer:'.length);
+
+        db.run(`DELETE FROM customers WHERE name = ?`, [customerName], function(err) {
+            if (err) {
+                bot.editMessageText("אירעה שגיאה במחיקת הלקוח.", { chat_id: chatId, message_id: msg.message_id })
+                    .catch(e => console.error('Error editing message:', e.message));
+                console.error('Database error:', err.message);
+                return;
+            }
+            const message = this.changes > 0 ? 
+                `הלקוח '${customerName}' נמחק בהצלחה.` :
+                `הלקוח '${customerName}' לא נמצא למחיקה.`;
+            
+            bot.editMessageText(message, { chat_id: chatId, message_id: msg.message_id })
+                .catch(e => console.error('Error editing message:', e.message));
+        });
         return;
     }
 });
@@ -441,6 +509,22 @@ bot.on('message', (msg) => {
 
   if (state && state.action === 'awaiting_new_contact_delivery') {
     handleNewContactDelivery(chatId, text);
+    return;
+  }
+
+  // --- טיפול במצב המשתמש (לניהול לקוחות) ---
+  if (state && state.action === 'awaiting_new_customer') {
+    handleNewCustomerAddition(chatId, text);
+    return;
+  }
+
+  if (state && state.action === 'awaiting_customer_search') {
+    handleCustomerSearch(chatId, text);
+    return;
+  }
+
+  if (state && state.action === 'awaiting_customer_update') {
+    handleCustomerUpdate(chatId, text);
     return;
   }
   
@@ -674,6 +758,11 @@ bot.on('message', (msg) => {
     bot.sendMessage(chatId, "בחר פעולה לניהול אנשי הקשר:", contactsMenuKeyboard)
         .catch(err => console.error('Error sending message:', err.message));
 
+  } else if (command === 'לקוחות') {
+    console.log(`Executing 'לקוחות' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "בחר פעולה לניהול הלקוחות:", customersMenuKeyboard)
+        .catch(err => console.error('Error sending message:', err.message));
+
   } else if (command === 'הוסף איש קשר חדש') {
     console.log(`Executing 'הוסף איש קשר חדש' for chat ID: ${chatId}`);
     bot.sendMessage(chatId, "שלח שם איש הקשר החדש:\n\nדוגמה: ישראל ישראלי")
@@ -811,7 +900,68 @@ bot.on('message', (msg) => {
     console.log(`Executing 'דו״ח מלאי' for chat ID: ${chatId}`);
     generateInventoryReport(chatId);
 
+  // --- פקודות ניהול לקוחות ---
+  } else if (command === 'הוסף לקוח חדש') {
+    console.log(`Executing 'הוסף לקוח חדש' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח פרטי הלקוח החדש בפורמט:\nשם [טלפון] [אימייל] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי 050-1234567 israel@email.com תל אביב לקוח VIP")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_new_customer',
+        timestamp: Date.now()
+    };
 
+  } else if (command === 'הצג לקוחות') {
+    console.log(`Executing 'הצג לקוחות' for chat ID: ${chatId}`);
+    displayAllCustomers(chatId);
+
+  } else if (command === 'חפש לקוח') {
+    console.log(`Executing 'חפש לקוח' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם או חלק משם הלקוח לחיפוש:")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_customer_search',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'מחק לקוח') {
+    console.log(`Executing 'מחק לקוח' for chat ID: ${chatId}`);
+    showCustomersForDeletion(chatId);
+
+  } else if (command === 'עדכן פרטי לקוח') {
+    console.log(`Executing 'עדכן פרטי לקוח' for chat ID: ${chatId}`);
+    bot.sendMessage(chatId, "שלח שם הלקוח ופרטים חדשים בפורמט:\nשם קיים | שם חדש [טלפון] [אימייל] [כתובת] [הערות]\n\nדוגמה: ישראל ישראלי | ישראל כהן 050-9876543")
+        .catch(err => console.error('Error sending message:', err.message));
+    
+    userState[chatId] = {
+        action: 'awaiting_customer_update',
+        timestamp: Date.now()
+    };
+
+  } else if (command === 'דוח לקוחות') {
+    console.log(`Executing 'דוח לקוחות' for chat ID: ${chatId}`);
+    generateCustomersReport(chatId);
+
+  } else if (command === 'שליחות ללקוח') {
+    console.log(`Executing 'שליחות ללקוח' for chat ID: ${chatId}`);
+    db.all("SELECT name FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת הלקוחות.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "רשימת הלקוחות ריקה. אנא הוסף לקוח קודם.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        const inlineKeyboard = rows.map(row => ([{ text: row.name, callback_data: `customer_delivery:${row.name}` }]));
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        bot.sendMessage(chatId, "לאיזה לקוח השליחות? בחר מהרשימה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+            .catch(e => console.error('Error sending message:', e.message));
+    });
 
   } else if (command === 'שליחות חדשה') {
     console.log(`Executing 'שליחות חדשה' for chat ID: ${chatId}`);
@@ -1974,6 +2124,306 @@ function handleNewContactDelivery(chatId, text) {
                     .catch(e => console.error('Error sending message:', e.message));
             }
             delete userState[chatId];
+        });
+    });
+}
+
+// --- פונקציות ניהול לקוחות ---
+function handleNewCustomerAddition(chatId, text) {
+    const parts = text.split(/\s+/);
+    
+    if (parts.length < 1) {
+        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות שם לקוח.", customersMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    const name = parts[0];
+    const phone = parts.length > 1 ? parts[1] : '';
+    const email = parts.length > 2 ? parts[2] : '';
+    const address = parts.length > 3 ? parts[3] : '';
+    const notes = parts.length > 4 ? parts.slice(4).join(' ') : '';
+    
+    // וולידציה של השם
+    if (name.length < 2) {
+        bot.sendMessage(chatId, "השם קצר מדי. אנא הכנס שם תקין.", customersMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+    
+    if (name.length > 100) {
+        bot.sendMessage(chatId, "השם ארוך מדי. אנא הכנס שם קצר יותר.", customersMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+    
+    const now = new Date().toISOString();
+    
+    console.log(`Adding new customer '${name}' for chat ID: ${chatId}`);
+    db.run(`INSERT INTO customers (name, phone, email, address, notes, created_at, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+        [name, phone, email, address, notes, now, now], function(err) {
+        if (err) {
+            if (err.code === 'SQLITE_CONSTRAINT') {
+                bot.sendMessage(chatId, `הלקוח '${name}' כבר קיים ברשימת הלקוחות.`, customersMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+            } else {
+                bot.sendMessage(chatId, "אירעה שגיאה בהוספת הלקוח.", customersMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+                console.error('Database error:', err.message);
+            }
+        } else {
+            let message = `✅ הלקוח נוסף בהצלחה!\n\n`;
+            message += `👤 שם: ${name}\n`;
+            message += `📞 טלפון: ${phone || 'לא צוין'}\n`;
+            message += `📧 אימייל: ${email || 'לא צוין'}\n`;
+            message += `🏠 כתובת: ${address || 'לא צוין'}\n`;
+            message += `📝 הערות: ${notes || 'לא צוין'}`;
+            
+            bot.sendMessage(chatId, message, customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+        delete userState[chatId];
+    });
+}
+
+function handleCustomerSearch(chatId, searchQuery) {
+    const query = `SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name COLLATE NOCASE`;
+    const searchPattern = `%${searchQuery}%`;
+    
+    db.all(query, [searchPattern, searchPattern, searchPattern], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בחיפוש.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+        } else if (rows.length === 0) {
+            bot.sendMessage(chatId, `לא נמצאו לקוחות התואמים לחיפוש "${searchQuery}".`, customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        } else {
+            let message = `🔍 תוצאות חיפוש עבור "${searchQuery}":\n\n`;
+            
+            rows.forEach((customer, index) => {
+                message += `${index + 1}. 👤 ${customer.name}\n`;
+                if (customer.phone) message += `📞 ${customer.phone}\n`;
+                if (customer.email) message += `📧 ${customer.email}\n`;
+                if (customer.address) message += `🏠 ${customer.address}\n`;
+                if (customer.notes) message += `📝 ${customer.notes}\n`;
+                message += `\n`;
+            });
+            
+            message += `📊 נמצאו ${rows.length} לקוחות`;
+            
+            if (message.length > 4000) {
+                const parts = [];
+                let currentPart = '';
+                const lines = message.split('\n');
+                
+                for (const line of lines) {
+                    if (currentPart.length + line.length > 4000) {
+                        parts.push(currentPart);
+                        currentPart = line + '\n';
+                    } else {
+                        currentPart += line + '\n';
+                    }
+                }
+                if (currentPart) parts.push(currentPart);
+                
+                parts.forEach((part, index) => {
+                    setTimeout(() => {
+                        const options = index === parts.length - 1 ? customersMenuKeyboard : {};
+                        bot.sendMessage(chatId, part, options)
+                            .catch(e => console.error('Error sending message:', e.message));
+                    }, index * 100);
+                });
+            } else {
+                bot.sendMessage(chatId, message, customersMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+            }
+        }
+        delete userState[chatId];
+    });
+}
+
+function handleCustomerUpdate(chatId, text) {
+    if (!text.includes('|')) {
+        bot.sendMessage(chatId, "פורמט שגוי. השתמש ב: שם קיים | פרטים חדשים", customersMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    const [oldName, newDetails] = text.split('|').map(part => part.trim());
+    const parts = newDetails.split(/\s+/);
+    
+    const newName = parts[0] || oldName;
+    const phone = parts.length > 1 ? parts[1] : '';
+    const email = parts.length > 2 ? parts[2] : '';
+    const address = parts.length > 3 ? parts[3] : '';
+    const notes = parts.length > 4 ? parts.slice(4).join(' ') : '';
+    
+    const now = new Date().toISOString();
+    
+    db.run(`UPDATE customers SET name = ?, phone = ?, email = ?, address = ?, notes = ?, last_updated = ? WHERE name = ? COLLATE NOCASE`, 
+        [newName, phone, email, address, notes, now, oldName], function(err) {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה בעדכון פרטי הלקוח.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+        } else if (this.changes === 0) {
+            bot.sendMessage(chatId, `הלקוח "${oldName}" לא נמצא.`, customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        } else {
+            let message = `✅ פרטי הלקוח עודכנו בהצלחה!\n\n`;
+            message += `👤 שם: ${newName}\n`;
+            message += `📞 טלפון: ${phone || 'לא צוין'}\n`;
+            message += `📧 אימייל: ${email || 'לא צוין'}\n`;
+            message += `🏠 כתובת: ${address || 'לא צוין'}\n`;
+            message += `📝 הערות: ${notes || 'לא צוין'}`;
+            
+            bot.sendMessage(chatId, message, customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+        delete userState[chatId];
+    });
+}
+
+function displayAllCustomers(chatId) {
+    db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת הלקוחות.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "📝 רשימת הלקוחות ריקה.\n\nניתן להוסיף לקוחות באמצעות כפתור 'הוסף לקוח חדש'", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        let message = `👥 רשימת לקוחות (${rows.length} לקוחות):\n\n`;
+        
+        rows.forEach((customer, index) => {
+            message += `${index + 1}. 👤 ${customer.name}\n`;
+            if (customer.phone) message += `   📞 ${customer.phone}\n`;
+            if (customer.email) message += `   📧 ${customer.email}\n`;
+            if (customer.address) message += `   🏠 ${customer.address}\n`;
+            if (customer.notes) message += `   📝 ${customer.notes}\n`;
+            message += `\n`;
+        });
+        
+        // חלוקת הודעות ארוכות
+        const maxLength = 4000;
+        if (message.length > maxLength) {
+            const parts = [];
+            let currentPart = '';
+            const lines = message.split('\n');
+            
+            for (const line of lines) {
+                if (currentPart.length + line.length > maxLength) {
+                    parts.push(currentPart);
+                    currentPart = line + '\n';
+                } else {
+                    currentPart += line + '\n';
+                }
+            }
+            if (currentPart) parts.push(currentPart);
+            
+            parts.forEach((part, index) => {
+                setTimeout(() => {
+                    const options = index === parts.length - 1 ? customersMenuKeyboard : {};
+                    bot.sendMessage(chatId, part, options)
+                        .catch(e => console.error('Error sending message:', e.message));
+                }, index * 100);
+            });
+        } else {
+            bot.sendMessage(chatId, message, customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+        }
+    });
+}
+
+function showCustomersForDeletion(chatId) {
+    db.all("SELECT name FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+        if (err) {
+            bot.sendMessage(chatId, "שגיאה בשליפת הלקוחות.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (rows.length === 0) {
+            bot.sendMessage(chatId, "רשימת הלקוחות ריקה, אין את מי למחוק.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        const inlineKeyboard = rows.map(row => [{ text: `❌ ${row.name}`, callback_data: `delete_customer:${row.name}` }]);
+        inlineKeyboard.push([{ text: "ביטול", callback_data: 'cancel_action' }]);
+        
+        bot.sendMessage(chatId, "⚠️ בחר לקוח למחיקה:", { reply_markup: { inline_keyboard: inlineKeyboard } })
+            .catch(e => console.error('Error sending message:', e.message));
+    });
+}
+
+function generateCustomersReport(chatId) {
+    const query = `SELECT COUNT(*) as total_customers FROM customers`;
+    
+    db.get(query, [], (err, row) => {
+        if (err) {
+            bot.sendMessage(chatId, "אירעה שגיאה ביצירת הדוח.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            console.error('Database error:', err.message);
+            return;
+        }
+        
+        if (row.total_customers === 0) {
+            bot.sendMessage(chatId, "רשימת הלקוחות ריקה, אין נתונים לדוח.", customersMenuKeyboard)
+                .catch(e => console.error('Error sending message:', e.message));
+            return;
+        }
+        
+        // דוח מפורט עם פילוח לפי שדות
+        db.all(`SELECT 
+            COUNT(*) as total,
+            COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END) as with_phone,
+            COUNT(CASE WHEN email IS NOT NULL AND email != '' THEN 1 END) as with_email,
+            COUNT(CASE WHEN address IS NOT NULL AND address != '' THEN 1 END) as with_address,
+            COUNT(CASE WHEN notes IS NOT NULL AND notes != '' THEN 1 END) as with_notes
+            FROM customers`, [], (err, detailRows) => {
+            
+            if (err) {
+                console.error('Database error in detailed report:', err.message);
+                return;
+            }
+            
+            const details = detailRows[0];
+            
+            let message = '📊 דוח לקוחות מפורט:\n\n';
+            message += `👥 סה״כ לקוחות: ${details.total}\n\n`;
+            message += `📈 פילוח נתונים:\n`;
+            message += `📞 עם טלפון: ${details.with_phone} (${((details.with_phone/details.total)*100).toFixed(1)}%)\n`;
+            message += `📧 עם אימייל: ${details.with_email} (${((details.with_email/details.total)*100).toFixed(1)}%)\n`;
+            message += `🏠 עם כתובת: ${details.with_address} (${((details.with_address/details.total)*100).toFixed(1)}%)\n`;
+            message += `📝 עם הערות: ${details.with_notes} (${((details.with_notes/details.total)*100).toFixed(1)}%)\n\n`;
+            
+            // לקוחות אחרונים
+            db.all(`SELECT name, created_at FROM customers ORDER BY created_at DESC LIMIT 5`, [], (err, recentRows) => {
+                if (!err && recentRows.length > 0) {
+                    message += `🆕 לקוחות אחרונים:\n`;
+                    recentRows.forEach((customer, index) => {
+                        const date = new Date(customer.created_at);
+                        const dateStr = date.toLocaleDateString('he-IL');
+                        message += `${index + 1}. ${customer.name} (${dateStr})\n`;
+                    });
+                }
+                
+                bot.sendMessage(chatId, message, customersMenuKeyboard)
+                    .catch(e => console.error('Error sending message:', e.message));
+            });
         });
     });
 } 
