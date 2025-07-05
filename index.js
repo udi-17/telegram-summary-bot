@@ -27,7 +27,8 @@ const initializeDatabaseAndStartServices = () => {
             recipient TEXT NOT NULL,
             item TEXT NOT NULL,
             amount REAL NOT NULL,
-            destination TEXT,
+            address TEXT,
+            phone TEXT,
             timestamp TEXT NOT NULL
         )`, (err) => {
             if (err) {
@@ -91,12 +92,16 @@ const initializeDatabaseAndStartServices = () => {
             }
         });
 
-        // Add destination column for backwards compatibility - safe to run multiple times
-        db.run('ALTER TABLE transactions ADD COLUMN destination TEXT', (err) => {
-            if (err && err.message.includes('duplicate column name')) {
-                // This is expected, ignore it.
-            } else if (err) {
-                console.error("Error altering table:", err.message);
+        // Add address and phone columns for backwards compatibility - safe to run multiple times
+        db.run('ALTER TABLE transactions ADD COLUMN address TEXT', (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.error("Error adding address column:", err.message);
+            }
+        });
+        
+        db.run('ALTER TABLE transactions ADD COLUMN phone TEXT', (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.error("Error adding phone column:", err.message);
             }
         });
 
@@ -280,7 +285,7 @@ bot.on('callback_query', (callbackQuery) => {
         const recipientName = data.substring('new_delivery_recipient:'.length);
         bot.editMessageText(`נבחר: ${recipientName}.`, { chat_id: chatId, message_id: msg.message_id })
             .catch(err => console.error('Error editing message:', err.message));
-        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום יעד")
+        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום כתובת טלפון")
             .catch(err => console.error('Error sending message:', err.message));
         
         userState[chatId] = {
@@ -295,7 +300,7 @@ bot.on('callback_query', (callbackQuery) => {
         const customerName = data.substring('customer_delivery:'.length);
         bot.editMessageText(`נבחר לקוח: ${customerName}.`, { chat_id: chatId, message_id: msg.message_id })
             .catch(err => console.error('Error editing message:', err.message));
-        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום יעד")
+        bot.sendMessage(chatId, "עכשיו שלח את פרטי השליחות, בפורמט: \nפריט סכום כתובת טלפון")
             .catch(err => console.error('Error sending message:', err.message));
         
         userState[chatId] = {
@@ -420,17 +425,36 @@ bot.on('message', (msg) => {
         }
     }
 
-    // We need at least an item before the amount and a destination after
-    if (amountIndex > 0 && amountIndex < parts.length - 1) {
+    // We need at least an item before the amount and address+phone after
+    if (amountIndex > 0 && amountIndex < parts.length - 2) {
         const item = parts.slice(0, amountIndex).join(' ');
         const amount = parseFloat(parts[amountIndex]);
-        const destination = parts.slice(amountIndex + 1).join(' ');
+        const remainingParts = parts.slice(amountIndex + 1);
+        
+        // Find phone number (looks for pattern with digits and dashes/spaces)
+        let phoneIndex = -1;
+        for (let i = 0; i < remainingParts.length; i++) {
+            if (/[\d\-\s]{7,}/.test(remainingParts[i])) {
+                phoneIndex = i;
+                break;
+            }
+        }
+        
+        let address, phone;
+        if (phoneIndex > 0) {
+            address = remainingParts.slice(0, phoneIndex).join(' ');
+            phone = remainingParts.slice(phoneIndex).join(' ');
+        } else {
+            // If no phone pattern found, assume last part is phone
+            address = remainingParts.slice(0, -1).join(' ');
+            phone = remainingParts[remainingParts.length - 1];
+        }
         
         const recipient = state.recipient;
         const timestamp = new Date(); // Use current time for this flow
 
-        db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
-            [recipient, item, amount, destination, timestamp.toISOString()], function(err) {
+        db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
+            [recipient, item, amount, address, phone, timestamp.toISOString()], function(err) {
             if (err) {
                 bot.sendMessage(chatId, "אירעה שגיאה בשמירת הנתונים.", mainMenuKeyboard)
                     .catch(e => console.error('Error sending message:', e.message));
@@ -456,7 +480,8 @@ bot.on('message', (msg) => {
             message += `👤 נמען: ${recipient}\n`;
             message += `📦 פריט: ${item}\n`;
             message += `💰 סכום: ${amount}₪\n`;
-            message += `📍 יעד: ${destination}\n`;
+            message += `🏠 כתובת: ${address}\n`;
+            message += `📞 טלפון: ${phone}\n`;
             message += `📅 תאריך: ${dateStr}\n`;
             message += `🕐 שעה: ${timeStr}`;
             
@@ -465,7 +490,7 @@ bot.on('message', (msg) => {
             delete userState[chatId];
         });
     } else {
-        bot.sendMessage(chatId, "הפורמט לא נכון. אנא שלח בפורמט: פריט סכום יעד (לדוגמה: אקמול 50 רעננה)", mainMenuKeyboard)
+        bot.sendMessage(chatId, "הפורמט לא נכון. אנא שלח בפורמט: פריט סכום כתובת טלפון (לדוגמה: אקמול 50 תל אביב 050-1234567)", mainMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
     }
     return;
