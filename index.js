@@ -212,9 +212,8 @@ const contactsMenuKeyboard = {
 const customersMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: 'הוסף לקוח חדש' }, { text: 'הצג לקוחות' }],
-            [{ text: 'חפש לקוח' }, { text: 'מחק לקוח' }],
-            [{ text: 'עדכן פרטי לקוח' }, { text: 'דוח לקוחות' }],
+            [{ text: 'הוסף לקוח חדש' }, { text: 'חפש לקוח' }],
+            [{ text: 'מחק לקוח' }, { text: 'עדכן פרטי לקוח' }],
             [{ text: 'שליחות ללקוח' }],
             [{ text: 'חזור' }]
         ],
@@ -911,10 +910,6 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command === 'הצג לקוחות') {
-    console.log(`Executing 'הצג לקוחות' for chat ID: ${chatId}`);
-    displayAllCustomers(chatId);
-
   } else if (command === 'חפש לקוח') {
     console.log(`Executing 'חפש לקוח' for chat ID: ${chatId}`);
     bot.sendMessage(chatId, "שלח שם או חלק משם הלקוח לחיפוש:")
@@ -938,10 +933,6 @@ bot.on('message', (msg) => {
         action: 'awaiting_customer_update',
         timestamp: Date.now()
     };
-
-  } else if (command === 'דוח לקוחות') {
-    console.log(`Executing 'דוח לקוחות' for chat ID: ${chatId}`);
-    generateCustomersReport(chatId);
 
   } else if (command === 'שליחות ללקוח') {
     console.log(`Executing 'שליחות ללקוח' for chat ID: ${chatId}`);
@@ -2289,62 +2280,7 @@ function handleCustomerUpdate(chatId, text) {
     });
 }
 
-function displayAllCustomers(chatId) {
-    db.all("SELECT * FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "שגיאה בשליפת הלקוחות.", customersMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, "📝 רשימת הלקוחות ריקה.\n\nניתן להוסיף לקוחות באמצעות כפתור 'הוסף לקוח חדש'", customersMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        
-        let message = `👥 רשימת לקוחות (${rows.length} לקוחות):\n\n`;
-        
-        rows.forEach((customer, index) => {
-            message += `${index + 1}. 👤 ${customer.name}\n`;
-            if (customer.phone) message += `   📞 ${customer.phone}\n`;
-            if (customer.email) message += `   📧 ${customer.email}\n`;
-            if (customer.address) message += `   🏠 ${customer.address}\n`;
-            if (customer.notes) message += `   📝 ${customer.notes}\n`;
-            message += `\n`;
-        });
-        
-        // חלוקת הודעות ארוכות
-        const maxLength = 4000;
-        if (message.length > maxLength) {
-            const parts = [];
-            let currentPart = '';
-            const lines = message.split('\n');
-            
-            for (const line of lines) {
-                if (currentPart.length + line.length > maxLength) {
-                    parts.push(currentPart);
-                    currentPart = line + '\n';
-                } else {
-                    currentPart += line + '\n';
-                }
-            }
-            if (currentPart) parts.push(currentPart);
-            
-            parts.forEach((part, index) => {
-                setTimeout(() => {
-                    const options = index === parts.length - 1 ? customersMenuKeyboard : {};
-                    bot.sendMessage(chatId, part, options)
-                        .catch(e => console.error('Error sending message:', e.message));
-                }, index * 100);
-            });
-        } else {
-            bot.sendMessage(chatId, message, customersMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        }
-    });
-}
+
 
 function showCustomersForDeletion(chatId) {
     db.all("SELECT name FROM customers ORDER BY name COLLATE NOCASE", [], (err, rows) => {
@@ -2369,61 +2305,4 @@ function showCustomersForDeletion(chatId) {
     });
 }
 
-function generateCustomersReport(chatId) {
-    const query = `SELECT COUNT(*) as total_customers FROM customers`;
-    
-    db.get(query, [], (err, row) => {
-        if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה ביצירת הדוח.", customersMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        
-        if (row.total_customers === 0) {
-            bot.sendMessage(chatId, "רשימת הלקוחות ריקה, אין נתונים לדוח.", customersMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        
-        // דוח מפורט עם פילוח לפי שדות
-        db.all(`SELECT 
-            COUNT(*) as total,
-            COUNT(CASE WHEN phone IS NOT NULL AND phone != '' THEN 1 END) as with_phone,
-            COUNT(CASE WHEN email IS NOT NULL AND email != '' THEN 1 END) as with_email,
-            COUNT(CASE WHEN address IS NOT NULL AND address != '' THEN 1 END) as with_address,
-            COUNT(CASE WHEN notes IS NOT NULL AND notes != '' THEN 1 END) as with_notes
-            FROM customers`, [], (err, detailRows) => {
-            
-            if (err) {
-                console.error('Database error in detailed report:', err.message);
-                return;
-            }
-            
-            const details = detailRows[0];
-            
-            let message = '📊 דוח לקוחות מפורט:\n\n';
-            message += `👥 סה״כ לקוחות: ${details.total}\n\n`;
-            message += `📈 פילוח נתונים:\n`;
-            message += `📞 עם טלפון: ${details.with_phone} (${((details.with_phone/details.total)*100).toFixed(1)}%)\n`;
-            message += `📧 עם אימייל: ${details.with_email} (${((details.with_email/details.total)*100).toFixed(1)}%)\n`;
-            message += `🏠 עם כתובת: ${details.with_address} (${((details.with_address/details.total)*100).toFixed(1)}%)\n`;
-            message += `📝 עם הערות: ${details.with_notes} (${((details.with_notes/details.total)*100).toFixed(1)}%)\n\n`;
-            
-            // לקוחות אחרונים
-            db.all(`SELECT name, created_at FROM customers ORDER BY created_at DESC LIMIT 5`, [], (err, recentRows) => {
-                if (!err && recentRows.length > 0) {
-                    message += `🆕 לקוחות אחרונים:\n`;
-                    recentRows.forEach((customer, index) => {
-                        const date = new Date(customer.created_at);
-                        const dateStr = date.toLocaleDateString('he-IL');
-                        message += `${index + 1}. ${customer.name} (${dateStr})\n`;
-                    });
-                }
-                
-                bot.sendMessage(chatId, message, customersMenuKeyboard)
-                    .catch(e => console.error('Error sending message:', e.message));
-            });
-        });
-    });
-} 
+ 
