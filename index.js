@@ -771,7 +771,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'שליחות לשליח חדש') {
     console.log(`Executing 'שליחות לשליח חדש' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח את שם השליח החדש ופרטי השליחות בפורמט:\n\nשם השליח פריט סכום יעד\n\nדוגמה: דוד כהן שולחן 500 תל אביב")
+    bot.sendMessage(chatId, "שלח את שם השליח החדש ופרטי השליחות בפורמט:\n\nשם השליח פריט סכום כתובת טלפון\n\nדוגמה: דוד כהן שולחן 500 תל אביב 050-1234567")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -1732,8 +1732,8 @@ function showContactsForDeletion(chatId) {
 function handleNewContactDelivery(chatId, text) {
     const parts = text.split(/\s+/);
     
-    if (parts.length < 4) {
-        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם השליח, פריט, סכום ויעד.\n\nדוגמה: דוד כהן שולחן 500 תל אביב", contactsMenuKeyboard)
+    if (parts.length < 5) {
+        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם השליח, פריט, סכום, כתובת וטלפון.\n\nדוגמה: דוד כהן שולחן 500 תל אביב 050-1234567", contactsMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         delete userState[chatId];
         return;
@@ -1759,7 +1759,8 @@ function handleNewContactDelivery(chatId, text) {
     const recipient = parts.slice(0, 2).join(' '); // First two words as name
     const item = parts.slice(2, amountIndex).join(' ');
     const amount = parseFloat(parts[amountIndex]);
-    const destination = parts.slice(amountIndex + 1).join(' ');
+    const address = parts[amountIndex + 1] || '';
+    const phone = parts[amountIndex + 2] || '';
 
     // Validate components
     if (!recipient || recipient.length < 2) {
@@ -1776,8 +1777,15 @@ function handleNewContactDelivery(chatId, text) {
         return;
     }
 
-    if (!destination) {
-        bot.sendMessage(chatId, "לא צוין יעד.", contactsMenuKeyboard)
+    if (!address) {
+        bot.sendMessage(chatId, "לא צוינה כתובת.", contactsMenuKeyboard)
+            .catch(e => console.error('Error sending message:', e.message));
+        delete userState[chatId];
+        return;
+    }
+
+    if (!phone) {
+        bot.sendMessage(chatId, "לא צוין טלפון.", contactsMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         delete userState[chatId];
         return;
