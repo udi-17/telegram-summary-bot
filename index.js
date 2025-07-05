@@ -268,6 +268,7 @@ bot.on('callback_query', (callbackQuery) => {
     const msg = callbackQuery.message;
     const chatId = msg.chat.id;
     const data = callbackQuery.data;
+    console.log(`Received callback query: '${data}' from chat ID: ${chatId}`);
 
     // Answer callback query to stop loading spinner
     bot.answerCallbackQuery(callbackQuery.id).catch(err => {
@@ -832,7 +833,7 @@ bot.on('callback_query', (callbackQuery) => {
                  reply_markup: {
                      inline_keyboard: [
                          [
-                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_contacts_menu' }
+                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_contacts_list' }
                          ]
                      ]
                  }
@@ -843,6 +844,7 @@ bot.on('callback_query', (callbackQuery) => {
 
      if (data === 'back_to_contacts_main_menu') {
          // חזרה לתפריט השליחים הראשי
+         console.log(`Handling back_to_contacts_main_menu for chat ID: ${chatId}`);
          bot.editMessageText("בחר פעולה לניהול השליחים:", { 
              chat_id: chatId, 
              message_id: msg.message_id,
@@ -938,6 +940,7 @@ bot.on('callback_query', (callbackQuery) => {
 
      if (data === 'back_to_customers_main_menu') {
          // חזרה לתפריט הלקוחות הראשי
+         console.log(`Handling back_to_customers_main_menu for chat ID: ${chatId}`);
          bot.editMessageText("בחר פעולה לניהול הלקוחות:", { 
              chat_id: chatId, 
              message_id: msg.message_id,
