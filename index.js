@@ -57,14 +57,19 @@ const initializeDatabaseAndStartServices = () => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_name TEXT NOT NULL,
             quantity INTEGER NOT NULL DEFAULT 0,
-            price REAL,
-            category TEXT,
-            description TEXT,
+            location TEXT,
             last_updated TEXT NOT NULL,
             created_at TEXT NOT NULL
         )`, (err) => {
             if (err) {
                 console.error('Error creating inventory table:', err.message);
+            } else {
+                // הוספת עמודת location לטבלה קיימת אם צריך
+                db.run(`ALTER TABLE inventory ADD COLUMN location TEXT`, (alterErr) => {
+                    if (alterErr && !alterErr.message.includes('duplicate column')) {
+                        console.error('Error adding location column:', alterErr.message);
+                    }
+                });
             }
         });
 
@@ -766,7 +771,7 @@ bot.on('message', (msg) => {
 
   } else if (command === 'הוסף פריט למלאי') {
     console.log(`Executing 'הוסף פריט למלאי' for chat ID: ${chatId}`);
-    bot.sendMessage(chatId, "שלח פרטי הפריט בפורמט:\nשם הפריט כמות מחיר [קטגוריה] [תיאור]\n\nדוגמה: שולחן 5 500 רהיטים שולחן עץ מלא")
+    bot.sendMessage(chatId, "שלח פרטי הפריט בפורמט:\nשם הפריט כמות [מיקום]\n\nדוגמה: שולחן 5 ישראל ישראלי\nאו: כיסא 10 מחסן ראשי")
         .catch(err => console.error('Error sending message:', err.message));
     
     userState[chatId] = {
@@ -1191,8 +1196,8 @@ console.log("Script execution finished. Bot is now polling for messages.");
 function handleInventoryItemAddition(chatId, text) {
     const parts = text.split(/\s+/);
     
-    if (parts.length < 3) {
-        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם פריט, כמות ומחיר.", inventoryMenuKeyboard)
+    if (parts.length < 2) {
+        bot.sendMessage(chatId, "פורמט שגוי. יש לכלול לפחות: שם פריט וכמות.", inventoryMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
         delete userState[chatId];
         return;
@@ -1214,44 +1219,24 @@ function handleInventoryItemAddition(chatId, text) {
         return;
     }
 
-    // Find the price (second number)
-    let priceIndex = -1;
-    for (let i = quantityIndex + 1; i < parts.length; i++) {
-        if (isValidNumber(parts[i])) {
-            priceIndex = i;
-            break;
-        }
-    }
-
-    if (priceIndex === -1) {
-        bot.sendMessage(chatId, "לא נמצא מחיר תקין.", inventoryMenuKeyboard)
-            .catch(e => console.error('Error sending message:', e.message));
-        delete userState[chatId];
-        return;
-    }
-
     const itemName = parts.slice(0, quantityIndex).join(' ');
     const quantity = parseInt(parts[quantityIndex]);
-    const price = parseFloat(parts[priceIndex]);
-    const category = parts.length > priceIndex + 1 ? parts[priceIndex + 1] : '';
-    const description = parts.length > priceIndex + 2 ? parts.slice(priceIndex + 2).join(' ') : '';
+    const location = parts.length > quantityIndex + 1 ? parts.slice(quantityIndex + 1).join(' ') : '';
     
     const now = new Date().toISOString();
 
-    db.run(`INSERT INTO inventory (item_name, quantity, price, category, description, last_updated, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-        [itemName, quantity, price, category, description, now, now], function(err) {
+    db.run(`INSERT INTO inventory (item_name, quantity, location, last_updated, created_at) 
+            VALUES (?, ?, ?, ?, ?)`, 
+        [itemName, quantity, location, now, now], function(err) {
         if (err) {
             bot.sendMessage(chatId, "אירעה שגיאה בהוספת הפריט למלאי.", inventoryMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             console.error('Database error:', err.message);
         } else {
-            const message = `✅ הפריט נוסף בהצלחה למלאי!\n\n` +
-                `📦 שם: ${itemName}\n` +
-                `🔢 כמות: ${quantity}\n` +
-                `💰 מחיר: ${price}₪\n` +
-                `📂 קטגוריה: ${category || 'לא צוין'}\n` +
-                `📝 תיאור: ${description || 'לא צוין'}`;
+            let message = `✅ הפריט נוסף בהצלחה למלאי!\n\n`;
+            message += `📦 שם: ${itemName}\n`;
+            message += `🔢 כמות: ${quantity}\n`;
+            message += `� מיקום: ${location || 'לא צוין'}`;
             
             bot.sendMessage(chatId, message, inventoryMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
@@ -1307,10 +1292,10 @@ function handleQuantityUpdate(chatId, text) {
 }
 
 function handleInventorySearch(chatId, searchQuery) {
-    const query = `SELECT * FROM inventory WHERE item_name LIKE ? OR description LIKE ? OR category LIKE ? ORDER BY item_name`;
+    const query = `SELECT * FROM inventory WHERE item_name LIKE ? OR location LIKE ? ORDER BY item_name`;
     const searchPattern = `%${searchQuery}%`;
     
-    db.all(query, [searchPattern, searchPattern, searchPattern], (err, rows) => {
+    db.all(query, [searchPattern, searchPattern], (err, rows) => {
         if (err) {
             bot.sendMessage(chatId, "אירעה שגיאה בחיפוש.", inventoryMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
@@ -1324,11 +1309,7 @@ function handleInventorySearch(chatId, searchQuery) {
             rows.forEach(item => {
                 message += `📦 ${item.item_name}\n`;
                 message += `🔢 כמות: ${item.quantity}\n`;
-                message += `💰 מחיר: ${item.price}₪\n`;
-                message += `📂 קטגוריה: ${item.category || 'לא צוין'}\n`;
-                if (item.description) {
-                    message += `📝 תיאור: ${item.description}\n`;
-                }
+                message += `� מיקום: ${item.location || 'לא צוין'}\n`;
                 message += `\n`;
             });
             
@@ -1364,7 +1345,7 @@ function handleInventorySearch(chatId, searchQuery) {
 }
 
 function displayInventory(chatId) {
-    const query = `SELECT * FROM inventory ORDER BY category, item_name`;
+    const query = `SELECT * FROM inventory ORDER BY location, item_name`;
     
     db.all(query, [], (err, rows) => {
         if (err) {
@@ -1381,15 +1362,15 @@ function displayInventory(chatId) {
         }
         
         let message = '📦 רשימת מלאי מלאה:\n\n';
-        let currentCategory = '';
+        let currentLocation = '';
         
         rows.forEach(item => {
-            if (item.category !== currentCategory) {
-                currentCategory = item.category || 'ללא קטגוריה';
-                message += `📂 ${currentCategory}:\n`;
+            if (item.location !== currentLocation) {
+                currentLocation = item.location || 'ללא מיקום';
+                message += `� ${currentLocation}:\n`;
             }
             
-            message += `▪️ ${item.item_name} - כמות: ${item.quantity}, מחיר: ${item.price}₪\n`;
+            message += `▪️ ${item.item_name} - כמות: ${item.quantity}\n`;
         });
         
         if (message.length > 4000) {
@@ -1450,12 +1431,11 @@ function generateInventoryReport(chatId) {
     const query = `SELECT 
         COUNT(*) as total_items,
         SUM(quantity) as total_quantity,
-        SUM(quantity * price) as total_value,
-        category,
-        COUNT(*) as items_in_category
+        location,
+        COUNT(*) as items_in_location
         FROM inventory 
-        GROUP BY category
-        ORDER BY category`;
+        GROUP BY location
+        ORDER BY location`;
     
     db.all(query, [], (err, rows) => {
         if (err) {
@@ -1473,26 +1453,22 @@ function generateInventoryReport(chatId) {
         
         let totalItems = 0;
         let totalQuantity = 0;
-        let totalValue = 0;
         
         let message = '📊 דו״ח מלאי מפורט:\n\n';
         
         rows.forEach(row => {
-            const category = row.category || 'ללא קטגוריה';
-            message += `📂 ${category}:\n`;
-            message += `▪️ מספר פריטים: ${row.items_in_category}\n`;
-            message += `▪️ כמות כוללת: ${row.total_quantity}\n`;
-            message += `▪️ ערך כולל: ${row.total_value?.toFixed(2) || 0}₪\n\n`;
+            const location = row.location || 'ללא מיקום';
+            message += `� ${location}:\n`;
+            message += `▪️ מספר פריטים: ${row.items_in_location}\n`;
+            message += `▪️ כמות כוללת: ${row.total_quantity}\n\n`;
             
-            totalItems += row.items_in_category;
+            totalItems += row.items_in_location;
             totalQuantity += row.total_quantity;
-            totalValue += row.total_value || 0;
         });
         
         message += `📈 סיכום כללי:\n`;
         message += `🔢 סה״כ פריטים שונים: ${totalItems}\n`;
-        message += `📦 סה״כ יחידות במלאי: ${totalQuantity}\n`;
-        message += `💰 ערך כולל של המלאי: ${totalValue.toFixed(2)}₪`;
+        message += `📦 סה״כ יחידות במלאי: ${totalQuantity}`;
         
         bot.sendMessage(chatId, message, inventoryMenuKeyboard)
             .catch(e => console.error('Error sending message:', e.message));
