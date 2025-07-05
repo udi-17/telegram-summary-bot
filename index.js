@@ -291,6 +291,33 @@ const sanitizeInput = (input) => {
     return input.trim().replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '');
 };
 
+// פונקציה לפורמט זמן ישראלי
+const formatIsraeliDateTime = (date, options = {}) => {
+    const israelTime = new Date(date.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+    
+    const defaultDateOptions = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    };
+    
+    const defaultTimeOptions = {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    };
+    
+    const dateOptions = options.dateFormat || defaultDateOptions;
+    const timeOptions = options.timeFormat || defaultTimeOptions;
+    
+    return {
+        date: israelTime.toLocaleDateString('he-IL', dateOptions),
+        time: israelTime.toLocaleTimeString('he-IL', timeOptions),
+        full: `${israelTime.toLocaleDateString('he-IL', dateOptions)} ${israelTime.toLocaleTimeString('he-IL', timeOptions)}`
+    };
+};
+
 // --- מאזין הודעות ונתב פקודות ראשי ---
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
@@ -341,8 +368,30 @@ bot.on('message', (msg) => {
                 delete userState[chatId];
                 return console.error('Database error:', err.message);
             }
-            const dateStr = `${timestamp.getDate().toString().padStart(2, '0')}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}`;
-            bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard)
+            // המרה לזמן ישראלי
+            const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+            const dateStr = israelTime.toLocaleDateString('he-IL', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            let message = `✅ שליחות נרשמה בהצלחה!\n\n`;
+            message += `📝 מספר רישום: #${this.lastID}\n`;
+            message += `👤 נמען: ${recipient}\n`;
+            message += `📦 פריט: ${item}\n`;
+            message += `💰 סכום: ${amount}₪\n`;
+            message += `📍 יעד: ${destination}\n`;
+            message += `📅 תאריך: ${dateStr}\n`;
+            message += `🕐 שעה: ${timeStr}`;
+            
+            bot.sendMessage(chatId, message, mainMenuKeyboard)
                 .catch(e => console.error('Error sending message:', e.message));
             delete userState[chatId];
         });
@@ -833,8 +882,17 @@ bot.on('message', (msg) => {
                 message += `#${row.id}: [תאריך שגוי] - ${row.recipient}, ${row.item}, ${row.amount}₪\n`;
                 return;
             }
-            const dateStr = `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear()}`;
-            const timeStr = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+            // המרה לזמן ישראלי
+            const israelTime = new Date(dt.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+            const dateStr = israelTime.toLocaleDateString('he-IL', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
 
             let dest = row.destination ? `, יעד: ${row.destination}` : '';
             message += `#${row.id}: ${dateStr} ${timeStr} - ${row.recipient}, ${row.item}, ${row.amount}₪${dest}\n`;
@@ -999,8 +1057,30 @@ bot.on('message', (msg) => {
                             .catch(e => console.error('Error sending message:', e.message));
                         return console.error('Database error:', err.message);
                     }
-                    const dateStr = `${timestamp.getDate().toString().padStart(2, '0')}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}`;
-                    bot.sendMessage(chatId, `נשמר (מספר #${this.lastID}): שליחה ל-${recipient} של ${item} בסכום ${amount} ליעד ${destination} בתאריך ${dateStr}`, mainMenuKeyboard)
+                    // המרה לזמן ישראלי
+                    const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                    const dateStr = israelTime.toLocaleDateString('he-IL', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                    
+                    let message = `✅ שליחות נרשמה בהצלחה!\n\n`;
+                    message += `📝 מספר רישום: #${this.lastID}\n`;
+                    message += `👤 נמען: ${recipient}\n`;
+                    message += `📦 פריט: ${item}\n`;
+                    message += `💰 סכום: ${amount}₪\n`;
+                    message += `📍 יעד: ${destination}\n`;
+                    message += `📅 תאריך: ${dateStr}\n`;
+                    message += `🕐 שעה: ${timeStr}`;
+                    
+                    bot.sendMessage(chatId, message, mainMenuKeyboard)
                         .catch(e => console.error('Error sending message:', e.message));
                 });
 
@@ -1463,8 +1543,17 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
                     return;
                 }
 
-                const dateStr = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                // המרה לזמן ישראלי
+                const israelTime = new Date(date.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                const dateStr = israelTime.toLocaleDateString('he-IL', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                });
+                const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
                 summaryText += `👤 *${row.recipient}* | 📦 ${row.item} | 💰 ${row.amount}₪ | 📍 ${row.destination || 'לא צוין'} | 📅 ${dateStr} ${timeStr}\n`;
             });
             summaryText += `\n*סה"כ: ${rows.length} שליחויות בסכום כולל של ${totalAmount.toFixed(2)}₪*`;
@@ -1874,14 +1963,28 @@ function handleNewContactDelivery(chatId, text) {
                     .catch(e => console.error('Error sending message:', e.message));
                 console.error('Database error:', transactionErr.message);
             } else {
-                const dateStr = `${timestamp.getDate().toString().padStart(2, '0')}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}`;
+                // המרה לזמן ישראלי
+                const israelTime = new Date(timestamp.toLocaleString("en-US", {timeZone: "Asia/Jerusalem"}));
+                const dateStr = israelTime.toLocaleDateString('he-IL', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                const timeStr = israelTime.toLocaleTimeString('he-IL', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
                 let message = `✅ שליחות נרשמה בהצלחה!\n\n`;
                 message += `📝 מספר רישום: #${this.lastID}\n`;
                 message += `👤 נמען: ${recipient}\n`;
                 message += `📦 פריט: ${item}\n`;
                 message += `💰 סכום: ${amount}₪\n`;
                 message += `📍 יעד: ${destination}\n`;
-                message += `📅 תאריך: ${dateStr}\n\n`;
+                message += `📅 תאריך: ${dateStr}\n`;
+                message += `🕐 שעה: ${timeStr}\n\n`;
                 
                 if (this.changes > 0) {
                     message += `📞 איש הקשר '${recipient}' נוסף לספר הכתובות!`;
