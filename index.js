@@ -685,66 +685,30 @@ bot.on('callback_query', (callbackQuery) => {
              deliveryMessage += `📞 טלפון: ${deliveryData.phone}\n`;
              deliveryMessage += `📅 תאריך: ${deliveryData.date}\n`;
              deliveryMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
-             deliveryMessage += `🚚 נשלח אליך כשליח`;
+             // הצגת פרטים לשליחה ידנית
+             let manualMessage = `📋 פרטי השליחות לשליח: ${courier.name}\n\n`;
+             manualMessage += `📝 מספר רישום: #${state.transactionId}\n`;
+             manualMessage += `👤 נמען: ${deliveryData.recipient}\n`;
+             manualMessage += `🛍️ מוצר: ${deliveryData.item}\n`;
+             manualMessage += `💰 סכום: ${deliveryData.amount}₪\n`;
+             manualMessage += `🏠 כתובת: ${deliveryData.address}\n`;
+             manualMessage += `📞 טלפון: ${deliveryData.phone}\n`;
+             manualMessage += `📅 תאריך: ${deliveryData.date}\n`;
+             manualMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
+             manualMessage += `📋 העתק את הפרטים ושלח ל-${courier.name}.`;
              
-             // בדיקה אם יש chat_id לשליח
-             if (!courier.chat_id) {
-                 // אין chat_id - הצגת פרטים לשליחה ידנית
-                 let manualMessage = `📋 פרטי השליחות לשליח: ${courier.name}\n\n`;
-                 manualMessage += `📝 מספר רישום: #${state.transactionId}\n`;
-                 manualMessage += `👤 נמען: ${deliveryData.recipient}\n`;
-                 manualMessage += `🛍️ מוצר: ${deliveryData.item}\n`;
-                 manualMessage += `💰 סכום: ${deliveryData.amount}₪\n`;
-                 manualMessage += `🏠 כתובת: ${deliveryData.address}\n`;
-                 manualMessage += `📞 טלפון: ${deliveryData.phone}\n`;
-                 manualMessage += `📅 תאריך: ${deliveryData.date}\n`;
-                 manualMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
-                 manualMessage += `📋 ${courier.name} לא פעיל בבוט.\nהעתק את הפרטים ושלח לו ידנית.`;
-                 
-                 bot.editMessageText(manualMessage, { 
-                     chat_id: chatId, 
-                     message_id: msg.message_id,
-                     reply_markup: {
-                         inline_keyboard: [
-                             [
-                                 { text: '🔄 בחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
-                                 { text: '✅ סיום', callback_data: 'finish_extraction' }
-                             ]
+             bot.editMessageText(manualMessage, { 
+                 chat_id: chatId, 
+                 message_id: msg.message_id,
+                 reply_markup: {
+                     inline_keyboard: [
+                         [
+                             { text: '🔄 בחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
+                             { text: '✅ סיום', callback_data: 'finish_extraction' }
                          ]
-                     }
-                 }).catch(e => console.error('Error editing message:', e.message));
-                 return;
-             }
-             
-             // יש chat_id - שליחה אוטומטית
-             bot.sendMessage(courier.chat_id, deliveryMessage)
-                 .then(() => {
-                     // הודעת אישור למשתמש
-                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה לשליח ${courier.name}!\n\n📝 מספר רישום: #${state.transactionId}\n🚚 ${courier.name} קיבל את כל הפרטים`, { 
-                         chat_id: chatId, 
-                         message_id: msg.message_id,
-                         reply_markup: {
-                             inline_keyboard: [
-                                 [{ text: '✅ סיום', callback_data: 'finish_extraction' }]
-                             ]
-                         }
-                     }).catch(e => console.error('Error editing message:', e.message));
-                 })
-                 .catch(e => {
-                     console.error('Error sending message to courier:', e.message);
-                     bot.editMessageText(`❌ לא ניתן לשלוח ל-${courier.name}`, { 
-                         chat_id: chatId, 
-                         message_id: msg.message_id,
-                         reply_markup: {
-                             inline_keyboard: [
-                                 [
-                                     { text: '🔄 בחירת שליח', callback_data: `send_to_courier:${extractionChatId}` },
-                                     { text: '✅ סיום', callback_data: 'finish_extraction' }
-                                 ]
-                             ]
-                         }
-                     }).catch(e => console.error('Error editing message:', e.message));
-                 });
+                     ]
+                 }
+             }).catch(e => console.error('Error editing message:', e.message));
          });
          return;
      }
