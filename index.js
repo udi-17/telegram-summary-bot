@@ -663,22 +663,7 @@ bot.on('callback_query', (callbackQuery) => {
                  return;
              }
              
-             // בדיקה אם יש chat_id לאיש הקשר
-             if (!contact.chat_id) {
-                 bot.editMessageText(`❌ לא ניתן לשלוח ל-${contact.name}.\nאיש הקשר לא פתח שיחה עם הבוט.\n\nכדי לקבל הודעות, ${contact.name} צריך לשלוח /start לבוט.`, { 
-                     chat_id: chatId, 
-                     message_id: msg.message_id,
-                     reply_markup: {
-                         inline_keyboard: [
-                             [
-                                 { text: '🔄 נסה איש קשר אחר', callback_data: `send_to_courier:${extractionChatId}` },
-                                 { text: '✅ סיום', callback_data: 'finish_extraction' }
-                             ]
-                         ]
-                     }
-                 }).catch(e => console.error('Error editing message:', e.message));
-                 return;
-             }
+
              
              // יצירת הודעת השליחות
              const deliveryData = state.transactionData;
@@ -692,8 +677,10 @@ bot.on('callback_query', (callbackQuery) => {
              deliveryMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
              deliveryMessage += `📨 נשלח אליך מהמערכת החכמה`;
              
-             // שליחת הודעה לאיש הקשר
-             bot.sendMessage(contact.chat_id, deliveryMessage)
+             // שליחת הודעה לאיש הקשר (ניסיון ישיר)
+             const targetChatId = contact.chat_id || contact.name; // נסה עם chat_id או שם
+             
+             bot.sendMessage(targetChatId, deliveryMessage)
                  .then(() => {
                      // הודעת אישור למשתמש
                      bot.editMessageText(`✅ השליחות נשלחה בהצלחה ל-${contact.name}!\n\n📝 מספר רישום: #${state.transactionId}\n📨 ${contact.name} קיבל את כל הפרטים`, { 
@@ -708,7 +695,7 @@ bot.on('callback_query', (callbackQuery) => {
                  })
                  .catch(e => {
                      console.error('Error sending message to contact:', e.message);
-                     bot.editMessageText(`❌ שגיאה בשליחת הודעה ל-${contact.name}.\nייתכן שאיש הקשר לא פתח שיחה עם הבוט.`, { 
+                     bot.editMessageText(`❌ לא ניתן לשלוח ל-${contact.name}`, { 
                          chat_id: chatId, 
                          message_id: msg.message_id,
                          reply_markup: {
