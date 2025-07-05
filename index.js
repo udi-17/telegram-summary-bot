@@ -390,6 +390,15 @@ bot.on('callback_query', (callbackQuery) => {
             }
         });
         
+        // הוספת הלקוח לטבלת הלקוחות עם כל הפרטים
+        const now = new Date().toISOString();
+        db.run(`INSERT OR REPLACE INTO customers (name, phone, address, email, notes, created_at, last_updated) VALUES (?, ?, ?, ?, ?, ?, ?)`, 
+            [extractedData.customerName, extractedData.phone || '', extractedData.address || '', '', 'נוסף מחילוץ חכם', now, now], (err) => {
+            if (err) {
+                console.error('Error auto-adding customer:', err.message);
+            }
+        });
+        
         // שמירת השליחות
         db.run(`INSERT INTO transactions (recipient, item, amount, address, phone, timestamp) VALUES (?, ?, ?, ?, ?, ?)`, 
             [extractedData.customerName, extractedData.product, extractedData.price, extractedData.address || '', extractedData.phone || '', timestamp.toISOString()], 
