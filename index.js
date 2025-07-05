@@ -594,40 +594,11 @@ bot.on('callback_query', (callbackQuery) => {
              return;
          }
          
-         // הצגת אפשרויות שליחה
-         bot.editMessageText("📨 איך תרצה לשלוח את הפרטים?", { 
-             chat_id: chatId, 
-             message_id: msg.message_id,
-             reply_markup: {
-                 inline_keyboard: [
-                     [
-                         { text: '🚚 שליחים', callback_data: `select_couriers:${extractionChatId}` },
-                         { text: '👥 אנשי קשר', callback_data: `select_contacts:${extractionChatId}` }
-                     ],
-                     [
-                         { text: '➕ שליח חדש', callback_data: `new_courier_delivery:${extractionChatId}` }
-                     ],
-                     [
-                         { text: '↩️ חזור', callback_data: `back_to_saved_delivery:${extractionChatId}` }
-                     ]
-                 ]
-             }
-         }).catch(e => console.error('Error editing message:', e.message));
-         return;
-     }
-
-     if (data.startsWith('select_couriers:')) {
-         const extractionChatId = data.substring('select_couriers:'.length);
-         const state = userState[extractionChatId];
-         
-         if (!state || state.action !== 'awaiting_courier_selection') {
-             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
-                 .catch(e => console.error('Error editing message:', e.message));
-             return;
-         }
-         
-         // שליפת רשימת השליחים
-         db.all(`SELECT * FROM couriers ORDER BY name`, (err, couriers) => {
+         // שליפת רשימת השליחים (כולל אנשי קשר)
+         db.all(`SELECT name, chat_id, phone, 'courier' as type FROM couriers 
+                 UNION ALL 
+                 SELECT name, chat_id, phone, 'contact' as type FROM contacts 
+                 ORDER BY name`, (err, allCouriers) => {
              if (err) {
                  bot.editMessageText("אירעה שגיאה בשליפת רשימת השליחים.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
@@ -635,8 +606,8 @@ bot.on('callback_query', (callbackQuery) => {
                  return;
              }
              
-             if (couriers.length === 0) {
-                 bot.editMessageText("לא נמצאו שליחים במערכת.\nהוסף שליחים דרך התפריט הראשי.", { 
+             if (allCouriers.length === 0) {
+                 bot.editMessageText("לא נמצאו שליחים במערכת.", { 
                      chat_id: chatId, 
                      message_id: msg.message_id,
                      reply_markup: {
@@ -645,7 +616,7 @@ bot.on('callback_query', (callbackQuery) => {
                                  { text: '➕ הוסף שליח חדש', callback_data: `new_courier_delivery:${extractionChatId}` }
                              ],
                              [
-                                 { text: '↩️ חזור', callback_data: `send_to_courier:${extractionChatId}` }
+                                 { text: '↩️ חזור', callback_data: `back_to_saved_delivery:${extractionChatId}` }
                              ]
                          ]
                      }
@@ -653,18 +624,23 @@ bot.on('callback_query', (callbackQuery) => {
                  return;
              }
              
-             // יצירת כפתורים לשליחים
+             // יצירת כפתורים לכל השליחים
              const courierButtons = [];
-             couriers.forEach(courier => {
+             allCouriers.forEach(courier => {
+                 const icon = courier.type === 'courier' ? '🚚' : '👥';
                  courierButtons.push([{
-                     text: `🚚 ${courier.name}`,
+                     text: `${icon} ${courier.name}`,
                      callback_data: `select_courier_for_delivery:${courier.name}:${extractionChatId}`
                  }]);
              });
              
+             courierButtons.push([
+                 { text: '➕ הוסף שליח חדש', callback_data: `new_courier_delivery:${extractionChatId}` }
+             ]);
+             
              courierButtons.push([{
                  text: '↩️ חזור',
-                 callback_data: `send_to_courier:${extractionChatId}`
+                 callback_data: `back_to_saved_delivery:${extractionChatId}`
              }]);
              
              bot.editMessageText("🚚 בחר שליח לשליחת הפרטים:", { 
@@ -678,64 +654,7 @@ bot.on('callback_query', (callbackQuery) => {
          return;
      }
 
-     if (data.startsWith('select_contacts:')) {
-         const extractionChatId = data.substring('select_contacts:'.length);
-         const state = userState[extractionChatId];
-         
-         if (!state || state.action !== 'awaiting_courier_selection') {
-             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
-                 .catch(e => console.error('Error editing message:', e.message));
-             return;
-         }
-         
-         // שליפת רשימת אנשי הקשר לשליחה
-         db.all(`SELECT * FROM contacts ORDER BY name`, (err, contacts) => {
-             if (err) {
-                 bot.editMessageText("אירעה שגיאה בשליפת רשימת אנשי הקשר.", { chat_id: chatId, message_id: msg.message_id })
-                     .catch(e => console.error('Error editing message:', e.message));
-                 console.error('Database error:', err.message);
-                 return;
-             }
-             
-             if (contacts.length === 0) {
-                 bot.editMessageText("לא נמצאו אנשי קשר במערכת.\nהוסף אנשי קשר דרך התפריט הראשי.", { 
-                     chat_id: chatId, 
-                     message_id: msg.message_id,
-                     reply_markup: {
-                         inline_keyboard: [
-                             [
-                                 { text: '↩️ חזור', callback_data: `send_to_courier:${extractionChatId}` }
-                             ]
-                         ]
-                     }
-                 }).catch(e => console.error('Error editing message:', e.message));
-                 return;
-             }
-             
-             // יצירת כפתורים לאנשי קשר
-             const contactButtons = [];
-             contacts.forEach(contact => {
-                 contactButtons.push([{
-                     text: `📨 ${contact.name}`,
-                     callback_data: `select_contact_for_delivery:${contact.name}:${extractionChatId}`
-                 }]);
-             });
-             
-             contactButtons.push([{
-                 text: '↩️ חזור',
-                 callback_data: `send_to_courier:${extractionChatId}`
-             }]);
-             
-             bot.editMessageText("📨 בחר איש קשר לשליחת הפרטים:", { 
-                 chat_id: chatId, 
-                 message_id: msg.message_id,
-                 reply_markup: {
-                     inline_keyboard: contactButtons
-                 }
-             }).catch(e => console.error('Error editing message:', e.message));
-         });
-         return;
-     }
+
 
      if (data.startsWith('select_courier_for_delivery:')) {
          const parts = data.split(':');
@@ -749,8 +668,11 @@ bot.on('callback_query', (callbackQuery) => {
              return;
          }
          
-         // שליפת פרטי השליח
-         db.get(`SELECT * FROM couriers WHERE name = ?`, [courierName], (err, courier) => {
+         // שליפת פרטי השליח (מטבלת שליחים או אנשי קשר)
+         db.get(`SELECT name, chat_id, phone, 'courier' as type FROM couriers WHERE name = ? 
+                 UNION ALL 
+                 SELECT name, chat_id, phone, 'contact' as type FROM contacts WHERE name = ?`, 
+                 [courierName, courierName], (err, courier) => {
              if (err || !courier) {
                  bot.editMessageText("אירעה שגיאה בשליפת פרטי השליח.", { chat_id: chatId, message_id: msg.message_id })
                      .catch(e => console.error('Error editing message:', e.message));
@@ -768,13 +690,16 @@ bot.on('callback_query', (callbackQuery) => {
              deliveryMessage += `📞 טלפון: ${deliveryData.phone}\n`;
              deliveryMessage += `📅 תאריך: ${deliveryData.date}\n`;
              deliveryMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
-             deliveryMessage += `🚚 נשלח אליך כשליח`;
+             const roleMessage = courier.type === 'courier' ? '🚚 נשלח אליך כשליח' : '📨 נשלח אליך מהמערכת החכמה';
+             deliveryMessage += roleMessage;
              
              // שליחת הודעה לשליח
              bot.sendMessage(courier.chat_id, deliveryMessage)
                  .then(() => {
                      // הודעת אישור למשתמש
-                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה לשליח ${courier.name}!\n\n📝 מספר רישום: #${state.transactionId}\n🚚 ${courier.name} קיבל את כל הפרטים`, { 
+                     const roleText = courier.type === 'courier' ? 'שליח' : 'איש קשר';
+                     const roleIcon = courier.type === 'courier' ? '🚚' : '📨';
+                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה ל${roleText} ${courier.name}!\n\n📝 מספר רישום: #${state.transactionId}\n${roleIcon} ${courier.name} קיבל את כל הפרטים`, { 
                          chat_id: chatId, 
                          message_id: msg.message_id,
                          reply_markup: {
@@ -786,13 +711,13 @@ bot.on('callback_query', (callbackQuery) => {
                  })
                  .catch(e => {
                      console.error('Error sending message to courier:', e.message);
-                     bot.editMessageText(`❌ לא ניתן לשלוח לשליח ${courier.name}`, { 
+                     bot.editMessageText(`❌ לא ניתן לשלוח ל-${courier.name}`, { 
                          chat_id: chatId, 
                          message_id: msg.message_id,
                          reply_markup: {
                              inline_keyboard: [
                                  [
-                                     { text: '🔄 נסה שליח אחר', callback_data: `select_couriers:${extractionChatId}` },
+                                     { text: '🔄 נסה שליח אחר', callback_data: `send_to_courier:${extractionChatId}` },
                                      { text: '✅ סיום', callback_data: 'finish_extraction' }
                                  ]
                              ]
@@ -835,75 +760,7 @@ bot.on('callback_query', (callbackQuery) => {
          return;
      }
 
-     if (data.startsWith('select_contact_for_delivery:')) {
-         const parts = data.split(':');
-         const contactName = parts[1];
-         const extractionChatId = parts[2];
-         const state = userState[extractionChatId];
-         
-         if (!state || state.action !== 'awaiting_courier_selection') {
-             bot.editMessageText("פג תוקף הפעולה. נסה שוב.", { chat_id: chatId, message_id: msg.message_id })
-                 .catch(e => console.error('Error editing message:', e.message));
-             return;
-         }
-         
-         // שליפת פרטי איש הקשר
-         db.get(`SELECT * FROM contacts WHERE name = ?`, [contactName], (err, contact) => {
-             if (err || !contact) {
-                 bot.editMessageText("אירעה שגיאה בשליפת פרטי איש הקשר.", { chat_id: chatId, message_id: msg.message_id })
-                     .catch(e => console.error('Error editing message:', e.message));
-                 console.error('Database error:', err?.message);
-                 return;
-             }
-             
 
-             
-             // יצירת הודעת השליחות
-             const deliveryData = state.transactionData;
-             let deliveryMessage = `📦 שליחות חדשה - #${state.transactionId}\n\n`;
-             deliveryMessage += `👤 נמען: ${deliveryData.recipient}\n`;
-             deliveryMessage += `🛍️ מוצר: ${deliveryData.item}\n`;
-             deliveryMessage += `💰 סכום: ${deliveryData.amount}₪\n`;
-             deliveryMessage += `🏠 כתובת: ${deliveryData.address}\n`;
-             deliveryMessage += `📞 טלפון: ${deliveryData.phone}\n`;
-             deliveryMessage += `📅 תאריך: ${deliveryData.date}\n`;
-             deliveryMessage += `🕐 שעה: ${deliveryData.time}\n\n`;
-             deliveryMessage += `📨 נשלח אליך מהמערכת החכמה`;
-             
-             // שליחת הודעה לאיש הקשר (ניסיון ישיר)
-             const targetChatId = contact.chat_id || contact.name; // נסה עם chat_id או שם
-             
-             bot.sendMessage(targetChatId, deliveryMessage)
-                 .then(() => {
-                     // הודעת אישור למשתמש
-                     bot.editMessageText(`✅ השליחות נשלחה בהצלחה ל-${contact.name}!\n\n📝 מספר רישום: #${state.transactionId}\n📨 ${contact.name} קיבל את כל הפרטים`, { 
-                         chat_id: chatId, 
-                         message_id: msg.message_id,
-                         reply_markup: {
-                             inline_keyboard: [
-                                 [{ text: '✅ סיום', callback_data: 'finish_extraction' }]
-                             ]
-                         }
-                     }).catch(e => console.error('Error editing message:', e.message));
-                 })
-                 .catch(e => {
-                     console.error('Error sending message to contact:', e.message);
-                     bot.editMessageText(`❌ לא ניתן לשלוח ל-${contact.name}`, { 
-                         chat_id: chatId, 
-                         message_id: msg.message_id,
-                         reply_markup: {
-                             inline_keyboard: [
-                                 [
-                                     { text: '🔄 נסה איש קשר אחר', callback_data: `send_to_courier:${extractionChatId}` },
-                                     { text: '✅ סיום', callback_data: 'finish_extraction' }
-                                 ]
-                             ]
-                         }
-                     }).catch(e => console.error('Error editing message:', e.message));
-                 });
-         });
-         return;
-     }
 
      if (data.startsWith('back_to_saved_delivery:')) {
          const extractionChatId = data.substring('back_to_saved_delivery:'.length);
