@@ -798,6 +798,80 @@ bot.on('callback_query', (callbackQuery) => {
          });
          return;
      }
+
+     if (data.startsWith('view_courier_details:')) {
+         const courierName = data.substring('view_courier_details:'.length);
+         
+         // שליפת פרטי השליח
+         db.get(`SELECT * FROM contacts WHERE name = ?`, [courierName], (err, courier) => {
+             if (err || !courier) {
+                 bot.editMessageText("אירעה שגיאה בשליפת פרטי השליח.", { chat_id: chatId, message_id: msg.message_id })
+                     .catch(e => console.error('Error editing message:', e.message));
+                 console.error('Database error:', err?.message);
+                 return;
+             }
+             
+             let message = `📋 פרטי השליח: ${courier.name}\n\n`;
+             message += `📞 טלפון: ${courier.phone || 'לא צוין'}\n`;
+             message += `💬 Chat ID: ${courier.chat_id || 'לא מחובר'}\n`;
+             
+             bot.editMessageText(message, { 
+                 chat_id: chatId, 
+                 message_id: msg.message_id,
+                 reply_markup: {
+                     inline_keyboard: [
+                         [
+                             { text: '↩️ חזור לרשימה', callback_data: 'back_to_contacts_menu' }
+                         ]
+                     ]
+                 }
+             }).catch(e => console.error('Error editing message:', e.message));
+         });
+         return;
+     }
+
+     if (data === 'back_to_contacts_menu') {
+         // חזרה לרשימת השליחים
+         db.all("SELECT * FROM contacts ORDER BY name COLLATE NOCASE", [], (err, rows) => {
+             if (err) {
+                 bot.editMessageText("שגיאה בשליפת השליחים.", { chat_id: chatId, message_id: msg.message_id })
+                     .catch(e => console.error('Error editing message:', e.message));
+                 console.error('Database error:', err.message);
+                 return;
+             }
+             
+             if (rows.length === 0) {
+                 bot.editMessageText("📝 ספר הכתובות ריק.\n\nניתן להוסיף שליחים באמצעות:\n• כפתור 'הוסף שליח חדש'\n• רישום שליחות (נוסף אוטומטית)", { 
+                     chat_id: chatId, 
+                     message_id: msg.message_id
+                 }).catch(e => console.error('Error editing message:', e.message));
+                 return;
+             }
+             
+             // יצירת כפתורים לבחירת שליח
+             const courierButtons = [];
+             rows.forEach(courier => {
+                 courierButtons.push([{
+                     text: `🚚 ${courier.name}`,
+                     callback_data: `view_courier_details:${courier.name}`
+                 }]);
+             });
+             
+             courierButtons.push([{
+                 text: '↩️ חזור לתפריט',
+                 callback_data: 'cancel_action'
+             }]);
+             
+             bot.editMessageText("🚚 בחר שליח לצפייה בפרטים:", { 
+                 chat_id: chatId, 
+                 message_id: msg.message_id,
+                 reply_markup: {
+                     inline_keyboard: courierButtons
+                 }
+             }).catch(e => console.error('Error editing message:', e.message));
+         });
+         return;
+     }
 });
 
 // --- טיפול בשגיאות בוט ---
@@ -2228,40 +2302,25 @@ function displayAllContacts(chatId) {
             return;
         }
         
-        let message = `📞 ספר הכתובות (${rows.length} שליחים):\n\n`;
-        
-        rows.forEach((contact, index) => {
-            message += `${index + 1}. 👤 ${contact.name}\n`;
+        // יצירת כפתורים לבחירת שליח
+        const courierButtons = [];
+        rows.forEach(courier => {
+            courierButtons.push([{
+                text: `🚚 ${courier.name}`,
+                callback_data: `view_courier_details:${courier.name}`
+            }]);
         });
         
-        // חלוקת הודעות ארוכות
-        const maxLength = 4000;
-        if (message.length > maxLength) {
-            const parts = [];
-            let currentPart = '';
-            const lines = message.split('\n');
-            
-            for (const line of lines) {
-                if (currentPart.length + line.length > maxLength) {
-                    parts.push(currentPart);
-                    currentPart = line + '\n';
-                } else {
-                    currentPart += line + '\n';
-                }
+        courierButtons.push([{
+            text: '↩️ חזור',
+            callback_data: 'back_to_contacts_menu'
+        }]);
+        
+        bot.sendMessage(chatId, "🚚 בחר שליח לצפייה בפרטים:", { 
+            reply_markup: {
+                inline_keyboard: courierButtons
             }
-            if (currentPart) parts.push(currentPart);
-            
-            parts.forEach((part, index) => {
-                setTimeout(() => {
-                    const options = index === parts.length - 1 ? contactsMenuKeyboard : {};
-                    bot.sendMessage(chatId, part, options)
-                        .catch(e => console.error('Error sending message:', e.message));
-                }, index * 100);
-            });
-        } else {
-            bot.sendMessage(chatId, message, contactsMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        }
+        }).catch(e => console.error('Error sending message:', e.message));
     });
 }
 
