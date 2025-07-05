@@ -183,9 +183,8 @@ const hebrewMonths = ["ינואר", "פברואר", "מרץ", "אפריל", "מ�
 const inventoryMenuKeyboard = {
     reply_markup: {
         keyboard: [
-            [{ text: 'הוסף פריט למלאי' }, { text: 'הצג מלאי' }],
-            [{ text: 'עדכן כמות' }, { text: 'מחק פריט' }],
-            [{ text: 'חפש במלאי' }, { text: 'דו״ח מלאי' }],
+            [{ text: 'הוסף פריט למלאי' }, { text: 'עדכן כמות' }],
+            [{ text: 'מחק פריט' }, { text: 'חפש במלאי' }],
             [{ text: 'חזור' }]
         ],
         resize_keyboard: true,
@@ -558,7 +557,7 @@ bot.on('message', (msg) => {
       "שליח\nהוסף שליח [שם]\nמחק שליח\nשליחות חדשה\n\n" +
       "ניהול מלאי:\n" +
       "ניהול מלאי - תפריט ניהול המלאי\n" +
-      "הוסף פריט למלאי\nהצג מלאי\nעדכן כמות\nחפש במלאי\nדו״ח מלאי\n\n" +
+      "הוסף פריט למלאי\nעדכן כמות\nמחק פריט\nחפש במלאי\n\n" +
       "סיכומים אוטומטיים:\n" +
       "הרשמה\nביטול הרשמה";
     bot.sendMessage(chatId, response, mainMenuKeyboard)
@@ -867,10 +866,6 @@ bot.on('message', (msg) => {
         timestamp: Date.now()
     };
 
-  } else if (command === 'הצג מלאי') {
-    console.log(`Executing 'הצג מלאי' for chat ID: ${chatId}`);
-    displayInventory(chatId);
-
   } else if (command === 'עדכן כמות') {
     console.log(`Executing 'עדכן כמות' for chat ID: ${chatId}`);
     bot.sendMessage(chatId, "שלח שם הפריט והכמות החדשה:\nשם הפריט כמות חדשה\n\nדוגמה: שולחן 10")
@@ -894,10 +889,6 @@ bot.on('message', (msg) => {
         action: 'awaiting_search_query',
         timestamp: Date.now()
     };
-
-  } else if (command === 'דו״ח מלאי') {
-    console.log(`Executing 'דו״ח מלאי' for chat ID: ${chatId}`);
-    generateInventoryReport(chatId);
 
   // --- פקודות ניהול לקוחות ---
   } else if (command === 'הוסף לקוח חדש') {
@@ -1485,63 +1476,7 @@ function handleInventorySearch(chatId, searchQuery) {
     });
 }
 
-function displayInventory(chatId) {
-    const query = `SELECT * FROM inventory ORDER BY location, item_name`;
-    
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה בשליפת המלאי.", inventoryMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, "המלאי ריק.", inventoryMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        
-        let message = '📦 רשימת מלאי מלאה:\n\n';
-        let currentLocation = '';
-        
-        rows.forEach(item => {
-            if (item.location !== currentLocation) {
-                currentLocation = item.location || 'ללא מיקום';
-                message += `� ${currentLocation}:\n`;
-            }
-            
-            message += `▪️ ${item.item_name} - כמות: ${item.quantity}\n`;
-        });
-        
-        if (message.length > 4000) {
-            const parts = [];
-            let currentPart = '';
-            const lines = message.split('\n');
-            
-            for (const line of lines) {
-                if (currentPart.length + line.length > 4000) {
-                    parts.push(currentPart);
-                    currentPart = line + '\n';
-                } else {
-                    currentPart += line + '\n';
-                }
-            }
-            if (currentPart) parts.push(currentPart);
-            
-            parts.forEach((part, index) => {
-                setTimeout(() => {
-                    const options = index === parts.length - 1 ? inventoryMenuKeyboard : {};
-                    bot.sendMessage(chatId, part, options)
-                        .catch(e => console.error('Error sending message:', e.message));
-                }, index * 100);
-            });
-        } else {
-            bot.sendMessage(chatId, message, inventoryMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-        }
-    });
-}
+
 
 function showInventoryForDeletion(chatId) {
     const query = `SELECT item_name FROM inventory ORDER BY item_name`;
@@ -1568,53 +1503,7 @@ function showInventoryForDeletion(chatId) {
     });
 }
 
-function generateInventoryReport(chatId) {
-    const query = `SELECT 
-        COUNT(*) as total_items,
-        SUM(quantity) as total_quantity,
-        location,
-        COUNT(*) as items_in_location
-        FROM inventory 
-        GROUP BY location
-        ORDER BY location`;
-    
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            bot.sendMessage(chatId, "אירעה שגיאה ביצירת הדו״ח.", inventoryMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            console.error('Database error:', err.message);
-            return;
-        }
-        
-        if (rows.length === 0) {
-            bot.sendMessage(chatId, "המלאי ריק, אין נתונים לדו״ח.", inventoryMenuKeyboard)
-                .catch(e => console.error('Error sending message:', e.message));
-            return;
-        }
-        
-        let totalItems = 0;
-        let totalQuantity = 0;
-        
-        let message = '📊 דו״ח מלאי מפורט:\n\n';
-        
-        rows.forEach(row => {
-            const location = row.location || 'ללא מיקום';
-            message += `� ${location}:\n`;
-            message += `▪️ מספר פריטים: ${row.items_in_location}\n`;
-            message += `▪️ כמות כוללת: ${row.total_quantity}\n\n`;
-            
-            totalItems += row.items_in_location;
-            totalQuantity += row.total_quantity;
-        });
-        
-        message += `📈 סיכום כללי:\n`;
-        message += `🔢 סה״כ פריטים שונים: ${totalItems}\n`;
-        message += `📦 סה״כ יחידות במלאי: ${totalQuantity}`;
-        
-        bot.sendMessage(chatId, message, inventoryMenuKeyboard)
-            .catch(e => console.error('Error sending message:', e.message));
-    });
-}
+
 
 function generateSummary(chatId, period, startDate, endDate, recipientName = null) {
     // וולידציה של פרמטרים
