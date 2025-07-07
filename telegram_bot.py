@@ -115,35 +115,39 @@ class TelegramSEOBot:
         
         # תפריט ראשי
         keyboard = [
-            [InlineKeyboardButton("📊 מידע על הבוט", callback_data='about')],
-            [InlineKeyboardButton("🎯 תכונות מתקדמות", callback_data='features')],
-            [InlineKeyboardButton("📈 סטטיסטיקות חיות", callback_data='live_stats')],
-            [InlineKeyboardButton("🎮 משחקים ופעילויות", callback_data='games')],
-            [InlineKeyboardButton("⚙️ הגדרות אישיות", callback_data='settings')],
-            [InlineKeyboardButton("❓ עזרה ותמיכה", callback_data='help')]
+            [InlineKeyboardButton("🌐 אטנט - שירותי אינטרנט", callback_data='atnet_info')],
+            [InlineKeyboardButton("🚀 פרקוסט - טכנולוגיות מתקדמות", callback_data='perkaust_info')],
+            [InlineKeyboardButton("� תמיכה ושירות לקוחות", callback_data='support')],
+            [InlineKeyboardButton("📊 מידע על השירותים", callback_data='info')],
+            [InlineKeyboardButton("📈 סטטיסטיקות ונתונים", callback_data='live_stats')],
+            [InlineKeyboardButton("❓ עזרה ותמיכה טכנית", callback_data='help')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         welcome_text = f"""
-🎉 שלום {user.first_name}! ברוך הבא לבוט הטוב ביותר בטלגרם! 
+🎉 שלום {user.first_name}! ברוך הבא לבוט אטנט ופרקוסט הרשמי! 
 
-🚀 **למה הבוט הזה מיוחד?**
-• 🧠 בינה מלאכותית מתקדמת
-• 📊 אנליטיקס בזמן אמת  
-• 🎯 ממשק אינטראקטיבי מתקדם
-• 🔔 התראות חכמות ומותאמות
-• 📱 תמיכה מלאה בעברית
-• ⚡ מהירות תגובה מיידית
+🌐 **אטנט - שירותי אינטרנט מובילים:**
+• ⚡ אינטרנט מהיר ויציב
+• 🔒 אבטחה מתקדמת
+• � תמיכה 24/7
+• 💰 מחירים תחרותיים
 
-📈 **נתונים מרשימים:**
-👥 {len(self.users):,} משתמשים פעילים
-📊 {self.analytics['messages_sent']:,} הודעות נשלחו  
-⭐ דירוג 5/5 כוכבים
-🏆 המקום הראשון בקטגוריה
+🚀 **פרקוסט - טכנולוגיות מתקדמות:**
+• 🤖 אוטומציה חכמה
+• 📊 ניתוח נתונים מתקדם
+• �️ פתרונות מותאמים אישית
+• 🎯 יעילות מקסימלית
 
-🎁 **חדש!** קבל גישה למידע בלעדי ותכונות מתקדמות
+📈 **הישגים:**
+👥 {len(self.users):,} לקוחות מרוצים
+📊 {self.analytics['messages_sent']:,} פניות טופלו
+⭐ 5/5 כוכבים מהלקוחות
+🏆 המובילים בתחום בישראל
 
-👇 בחר מהתפריט להתחלה:
+💡 **חפשת אטנט או פרקוסט? הגעת למקום הנכון!**
+
+👇 בחר את השירות שמעניין אותך:
         """
         
         await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
@@ -750,24 +754,27 @@ Python 3.9+, AI, Machine Learning, Real-time Analytics
     async def show_main_menu(self, query):
         """הצגת תפריט ראשי"""
         text = f"""
-🏠 **התפריט הראשי**
+🏠 **התפריט הראשי - אטנט ופרקוסט**
 
-ברוכים הבאים למרכז הבקרה של הבוט המתקדם!
+ברוכים הבאים למרכז השירות של אטנט ופרקוסט!
 
-👥 משתמשים פעילים: {len(self.users):,}
-📊 הודעות שנשלחו: {self.analytics['messages_sent']:,}
-⭐ דירוג: 5/5 כוכבים
+🌐 **אטנט:** שירותי אינטרנט מתקדמים
+🚀 **פרקוסט:** טכנולוגיות חדשניות
 
-בחר אפשרות מהתפריט:
+👥 לקוחות מרוצים: {len(self.users):,}
+📊 פניות טופלו: {self.analytics['messages_sent']:,}
+⭐ דירוג: 5/5 כוכבים מהלקוחות
+
+בחר את השירות או המידע שמעניין אותך:
         """
         
         keyboard = [
-            [InlineKeyboardButton("📊 מידע על הבוט", callback_data='about')],
-            [InlineKeyboardButton("🎯 תכונות מתקדמות", callback_data='features')],
-            [InlineKeyboardButton("📈 סטטיסטיקות חיות", callback_data='live_stats')],
-            [InlineKeyboardButton("🎮 משחקים ופעילויות", callback_data='games')],
-            [InlineKeyboardButton("⚙️ הגדרות אישיות", callback_data='settings')],
-            [InlineKeyboardButton("❓ עזרה ותמיכה", callback_data='help')]
+            [InlineKeyboardButton("🌐 אטנט - שירותי אינטרנט", callback_data='atnet_info')],
+            [InlineKeyboardButton("🚀 פרקוסט - טכנולוגיות מתקדמות", callback_data='perkaust_info')],
+            [InlineKeyboardButton("� תמיכה ושירות לקוחות", callback_data='support')],
+            [InlineKeyboardButton("📊 מידע על השירותים", callback_data='info')],
+            [InlineKeyboardButton("📈 סטטיסטיקות ונתונים", callback_data='live_stats')],
+            [InlineKeyboardButton("❓ עזרה ותמיכה טכנית", callback_data='help')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
