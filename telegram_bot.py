@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # 🔑 הגדרות בוט - עדכן את הטוקן כאן!
 # החלף את "YOUR_BOT_TOKEN_HERE" עם הטוקן שקיבלת מ-@BotFather
 # דוגמה: BOT_TOKEN = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8121925236:AAE34qOjqMNqtlEqsgZnqvIARL1tyyPNkX0"
 
 # ⚠️ זכור: אל תשתף את הטוקן עם אף אחד!
 
@@ -56,7 +56,6 @@ class TelegramSEOBot:
             CommandHandler("help", self.help_command),
             CommandHandler("stats", self.stats_command),
             CommandHandler("about", self.about_command),
-            CommandHandler("features", self.features_command),
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message),
             CallbackQueryHandler(self.button_handler),
             PollAnswerHandler(self.poll_answer)
