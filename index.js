@@ -10,7 +10,15 @@ const token = process.env.TELEGRAM_BOT_TOKEN || '7688500141:AAHqfWSYxf-z2pWULlWf
 console.log('🔍 DEBUG: טוקן בשימוש:', token);
 console.log('🔍 DEBUG: אורך טוקן:', token.length);
 
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token, { 
+    polling: {
+        interval: 1000,
+        autoStart: true,
+        params: {
+            timeout: 10
+        }
+    }
+});
 
 // --- הגדרת מסד הנתונים ---
 const db = new sqlite3.Database('./data.db', (err) => {
@@ -1022,10 +1030,19 @@ bot.on('callback_query', (callbackQuery) => {
 
 // --- טיפול בשגיאות בוט ---
 bot.on('polling_error', (error) => {
-    console.error(`Polling error: ${error.code} - ${error.message}`);
+    console.error(`🚨 Polling error: ${error.code} - ${error.message}`);
+    
+    // טיפול מיוחד בשגיאת 401
+    if (error.code === 'ETELEGRAM' && error.message.includes('401')) {
+        console.log('🔄 401 Unauthorized - מנסה להמשיך...');
+        return; // לא נעצור את הבוט בגלל 401
+    }
+    
     if (error.code === 'EFATAL') {
-        console.log('Fatal error detected, attempting to restart...');
-        // כאן אפשר להוסיף לוגיקה של restart
+        console.log('💀 Fatal error detected, attempting to restart...');
+        setTimeout(() => {
+            process.exit(1);
+        }, 5000);
     }
 });
 
