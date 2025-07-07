@@ -5,7 +5,7 @@ const chrono = require('chrono-node');
 const SmartDeliveryParser = require('./smart-parser');
 
 // --- הגדרות ראשוניות ---
-const token = process.env.TELEGRAM_BOT_TOKEN || '7688500141:AAFs2USUgfxWygwb5YhTMShQ9l9q9oGFxR0';
+const token = process.env.TELEGRAM_BOT_TOKEN || '7688500141:AAHqfWSYxf-z2pWULlWf1e4vHtsxN_au7do';
 
 console.log('🔍 DEBUG: טוקן בשימוש:', token);
 console.log('🔍 DEBUG: אורך טוקן:', token.length);
