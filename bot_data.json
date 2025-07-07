@@ -1,0 +1,20 @@
+{
+  "users": [
+    6347140594
+  ],
+  "user_data": {
+    "6347140594": {
+      "name": "תרופות",
+      "username": "doktorkod",
+      "last_active": "2025-07-07T02:54:00.269428",
+      "interaction_count": 9
+    }
+  },
+  "analytics": {
+    "total_users": 1,
+    "active_users": 0,
+    "messages_sent": 9,
+    "button_clicks": 18,
+    "daily_stats": {}
+  }
+}
