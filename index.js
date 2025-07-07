@@ -5,7 +5,11 @@ const chrono = require('chrono-node');
 const SmartDeliveryParser = require('./smart-parser');
 
 // --- הגדרות ראשוניות ---
-const token = process.env.TELEGRAM_BOT_TOKEN || '7688500141:AAFs2USUgfxWygwb5YhTMShQ9l9q9oGFxR0';
+const token = process.env.TELEGRAM_BOT_TOKEN || '7777403969:AAGCHpsuGMC-D30aiTcbXyUmRdmmlg-gerw';
+
+console.log('🔍 DEBUG: טוקן בשימוש:', token);
+console.log('🔍 DEBUG: אורך טוקן:', token.length);
+
 const bot = new TelegramBot(token, { polling: true });
 
 // --- הגדרת מסד הנתונים ---
@@ -136,6 +140,9 @@ const initializeDatabaseAndStartServices = () => {
 };
 
 console.log('Bot has been started...');
+
+console.log('🔍 DEBUG: טוקן בשימוש:', token);
+console.log('🔍 DEBUG: אורך טוקן:', token.length);
 
 // --- יצירת מפענח חכם ---
 const smartParser = new SmartDeliveryParser();
