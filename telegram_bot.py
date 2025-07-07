@@ -27,7 +27,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 🔑 הגדרות בוט - עדכן את הטוקן כאן!
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # החלף עם הטוקן שלך!
+# החלף את "YOUR_BOT_TOKEN_HERE" עם הטוקן שקיבלת מ-@BotFather
+# דוגמה: BOT_TOKEN = "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+
+# ⚠️ זכור: אל תשתף את הטוקן עם אף אחד!
 
 class TelegramSEOBot:
     def __init__(self):
