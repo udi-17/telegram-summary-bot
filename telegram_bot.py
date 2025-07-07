@@ -56,6 +56,10 @@ class TelegramSEOBot:
             CommandHandler("help", self.help_command),
             CommandHandler("stats", self.stats_command),
             CommandHandler("about", self.about_command),
+            CommandHandler("atnet", self.atnet_command),
+            CommandHandler("perkaust", self.perkaust_command),
+            CommandHandler("info", self.info_command),
+            CommandHandler("support", self.support_command),
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message),
             CallbackQueryHandler(self.button_handler),
             PollAnswerHandler(self.poll_answer)
@@ -273,6 +277,181 @@ class TelegramSEOBot:
         """
         await update.message.reply_text(about_text, parse_mode='Markdown')
     
+    async def atnet_command(self, update: Update, context):
+        """מידע מפורט על אטנט"""
+        atnet_text = """
+🌐 **אטנט - המדריך המלא והמעודכן**
+
+🎯 **מה זה אטנט?**
+אטנט הוא שירות אינטרנט מתקדם המספק חיבור יציב ומהיר לרשת העולמית.
+
+📡 **שירותי אטנט:**
+• 🚀 אינטרנט מהיר וזמין 24/7
+• 📱 תמיכה במכשירים ניידים
+• 🔒 אבטחה מתקדמת ברמה גבוהה
+• 💻 פתרונות לעסקים וביתיים
+• 🛠️ תמיכה טכנית מקצועית
+
+⚡ **יתרונות אטנט:**
+• מהירות גלישה מעולה
+• יציבות חיבור גבוהה
+• שירות לקוחות איכותי
+• מחירים תחרותיים
+• הגדרה קלה ומהירה
+
+🔧 **בעיות נפוצות ופתרונות:**
+• בעיות חיבור - בדוק כבלים וראוטר
+• מהירות איטית - צור קשר עם התמיכה
+• התנתקויות - בדוק הגדרות רשת
+
+📞 **צריך עזרה? אני כאן בשבילך!**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🔧 פתרון בעיות", callback_data='atnet_troubleshoot')],
+            [InlineKeyboardButton("📞 תמיכה טכנית", callback_data='atnet_support')],
+            [InlineKeyboardButton("💰 מחירונים", callback_data='atnet_pricing')],
+            [InlineKeyboardButton("🔙 חזור", callback_data='main_menu')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(atnet_text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def perkaust_command(self, update: Update, context):
+        """מידע מפורט על פרקוסט"""
+        perkaust_text = """
+🚀 **פרקוסט - הטכנולוגיה המתקדמת ביותר**
+
+🎯 **מה זה פרקוסט?**
+פרקוסט הוא מערכת טכנולוגית מתקדמת המספקת פתרונות חדשניים ויעילים.
+
+🛠️ **שירותי פרקוסט:**
+• 💡 פתרונות חכמים ומתקדמים
+• 🔧 יישום טכנולוגיות חדשות
+• 📈 שיפור ביצועים וייעול
+• 🎯 התאמה אישית לצרכים
+• 🌟 חדשנות וקידמה טכנולוגית
+
+⭐ **יתרונות פרקוסט:**
+• טכנולוגיה מובילה בתחום
+• יעילות מקסימלית
+• חסכון בזמן ובעלויות
+• תמיכה מקצועית מלאה
+• עדכונים שוטפים
+
+💡 **תחומי יישום:**
+• אוטומציה ובקרה
+• ניתוח נתונים מתקדם
+• אופטימיזציה של תהליכים
+• רשתות חכמות
+• פתרונות ענן
+
+🎓 **מדריכים וטיפים:**
+• הגדרה ותצורה נכונה
+• שימוש יעיל במערכת
+• תחזוקה שוטפת
+• עדכונים וגיבויים
+
+📞 **תמיכה מקצועית זמינה!**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🛠️ מדריך הגדרה", callback_data='perkaust_setup')],
+            [InlineKeyboardButton("📊 ניתוח ביצועים", callback_data='perkaust_analytics')],
+            [InlineKeyboardButton("🎓 הדרכות", callback_data='perkaust_tutorials')],
+            [InlineKeyboardButton("🔙 חזור", callback_data='main_menu')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(perkaust_text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def info_command(self, update: Update, context):
+        """מידע כללי"""
+        info_text = """
+📋 **מידע כללי - אטנט ופרקוסט**
+
+🌐 **אטנט:**
+שירותי אינטרנט מתקדמים עם דגש על מהירות, יציבות ושירות איכותי.
+
+🚀 **פרקוסט:**
+טכנולוגיות חדשניות לאוטומציה, ניתוח נתונים ואופטימיזציה.
+
+🔗 **הקשר ביניהם:**
+שני השירותים משלימים זה את זה ומספקים פתרון טכנולוגי מלא.
+
+📞 **איך אנחנו יכולים לעזור:**
+• ייעוץ טכני מקצועי
+• הדרכה והטמעה
+• תמיכה שוטפת
+• פתרון בעיות
+• עדכונים ושיפורים
+
+💡 **עצות לשימוש מיטבי:**
+• השתמש בכלי הניתוח הפנימיים
+• בצע עדכונים שוטפים
+• התאם הגדרות לצרכים האישיים
+• צור קשר עם התמיכה בצורך
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🌐 מידע על אטנט", callback_data='atnet_info')],
+            [InlineKeyboardButton("🚀 מידע על פרקוסט", callback_data='perkaust_info')],
+            [InlineKeyboardButton("📞 צור קשר", callback_data='contact_us')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(info_text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def support_command(self, update: Update, context):
+        """תמיכה וסיוע"""
+        support_text = """
+🆘 **מרכז התמיכה - אטנט ופרקוסט**
+
+📞 **דרכי יצירת קשר:**
+• 💬 צ'אט מהיר במערכת
+• 📧 מייל: support@example.com
+• 📱 טלפון: 02-1234567
+• 🌐 אתר: www.example.com
+
+⏰ **שעות פעילות:**
+• ראשון-חמישי: 08:00-20:00
+• שישי: 08:00-14:00
+• שבת: סגור
+• חירום: 24/7
+
+🎯 **סוגי תמיכה:**
+
+🔧 **תמיכה טכנית:**
+• פתרון בעיות
+• הגדרות מערכת
+• עדכונים ותיקונים
+• אופטימיזציה
+
+💡 **ייעוץ ומידע:**
+• בחירת פתרון מתאים
+• הדרכה ראשונית
+• עצות לשימוש
+• המלצות מקצועיות
+
+📈 **שירותים מתקדמים:**
+• ניתוח ביצועים
+• התאמות אישיות
+• שדרוגים ושיפורים
+• יישום פתרונות חדשים
+
+⚡ **תגובה מהירה מובטחת!**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("💬 צ'אט מהיר", callback_data='quick_chat')],
+            [InlineKeyboardButton("🔧 בעיה טכנית", callback_data='tech_issue')],
+            [InlineKeyboardButton("💡 ייעוץ כללי", callback_data='general_advice')],
+            [InlineKeyboardButton("📋 פתח תיק שירות", callback_data='open_ticket')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(support_text, reply_markup=reply_markup, parse_mode='Markdown')
+    
     async def handle_message(self, update: Update, context):
         """מענה חכם להודעות"""
         user_message = update.message.text.lower()
@@ -303,16 +482,45 @@ class TelegramSEOBot:
     def get_smart_response(self, message, user_name):
         """מערכת מענה חכם"""
         
-        # ברכות
-        if any(word in message for word in ['שלום', 'היי', 'הי', 'בוקר טוב', 'ערב טוב', 'איך עניינים']):
+        # זיהוי אטנט
+        if any(word in message for word in ['אטנט', 'atnet', 'אינטרנט', 'חיבור', 'רשת']):
             responses = [
-                f"שלום {user_name}! 😊 איך אני יכול לעזור לך היום?",
-                f"היי {user_name}! 🌟 נהדר לראות אותך!",
-                f"ברכות {user_name}! 🙏 במה אוכל לסייע?"
+                f"🌐 **{user_name}, שמחתי לעזור עם אטנט!**\n\nאטנט מספק שירותי אינטרנט מתקדמים עם מהירות גבוהה ויציבות מלאה. מה בדיוק אתה מחפש?",
+                f"📡 **היי {user_name}!** אטנט הוא הפתרון המושלם לחיבור אינטרנט מהיר ויציב!\n\nבמה אוכל לעזור לך היום?",
+                f"⚡ **{user_name}, מצוין שבחרת באטנט!**\n\nיש לנו פתרונות מתקדמים לכל הצרכים שלך. איך אני יכול לסייע?"
             ]
             keyboard = [
-                [InlineKeyboardButton("📊 מה חדש?", callback_data='whats_new')],
-                [InlineKeyboardButton("🎯 תכונות", callback_data='features')]
+                [InlineKeyboardButton("🔧 פתרון בעיות", callback_data='atnet_troubleshoot')],
+                [InlineKeyboardButton("📞 תמיכה טכנית", callback_data='atnet_support')],
+                [InlineKeyboardButton("💡 מידע מלא", callback_data='atnet_info')]
+            ]
+            return responses[len(message) % len(responses)], keyboard
+        
+        # זיהוי פרקוסט
+        elif any(word in message for word in ['פרקוסט', 'perkaust', 'טכנולוגיה', 'אוטומציה', 'ניתוח נתונים']):
+            responses = [
+                f"🚀 **{user_name}, פרקוסט זה בדיוק מה שאתה צריך!**\n\nטכנולוגיה מתקדמת לאוטומציה וניתוח נתונים ברמה הגבוהה ביותר!",
+                f"💡 **היי {user_name}!** פרקוסט מציע פתרונות חדשניים שישפרו לך את הביצועים באופן דרמטי!\n\nמה המטרה שלך?",
+                f"🎯 **{user_name}, בחירה מעולה!** פרקוסט הוא העתיד של הטכנולוגיה החכמה!\n\nאיך אוכל להתאים לך פתרון?"
+            ]
+            keyboard = [
+                [InlineKeyboardButton("🛠️ מדריך הגדרה", callback_data='perkaust_setup')],
+                [InlineKeyboardButton("📊 ניתוח ביצועים", callback_data='perkaust_analytics')],
+                [InlineKeyboardButton("🎓 הדרכות", callback_data='perkaust_tutorials')]
+            ]
+            return responses[len(message) % len(responses)], keyboard
+        
+        # ברכות
+        elif any(word in message for word in ['שלום', 'היי', 'הי', 'בוקר טוב', 'ערב טוב', 'איך עניינים']):
+            responses = [
+                f"שלום {user_name}! 😊 איך אני יכול לעזור לך היום?\n\n🌐 מחפש מידע על **אטנט** או 🚀 **פרקוסט**?",
+                f"היי {user_name}! 🌟 נהדר לראות אותך!\n\nיש לי מידע מעולה על אטנט ופרקוסט!",
+                f"ברכות {user_name}! 🙏 במה אוכל לסייע?\n\nאטנט ופרקוסט - הפתרונות הטובים ביותר!"
+            ]
+            keyboard = [
+                [InlineKeyboardButton("🌐 אטנט", callback_data='atnet_info')],
+                [InlineKeyboardButton("🚀 פרקוסט", callback_data='perkaust_info')],
+                [InlineKeyboardButton("📊 מה חדש?", callback_data='whats_new')]
             ]
             return responses[len(message) % len(responses)], keyboard
         
@@ -430,7 +638,23 @@ class TelegramSEOBot:
             'chat_more': self.show_chat_more,
             'refresh_stats': self.refresh_stats,
             'activity_graph': self.show_activity_graph,
-            'leaderboard': self.show_leaderboard
+            'leaderboard': self.show_leaderboard,
+            # כפתורי אטנט
+            'atnet_info': self.show_atnet_info,
+            'atnet_troubleshoot': self.show_atnet_troubleshoot,
+            'atnet_support': self.show_atnet_support,
+            'atnet_pricing': self.show_atnet_pricing,
+            # כפתורי פרקוסט
+            'perkaust_info': self.show_perkaust_info,
+            'perkaust_setup': self.show_perkaust_setup,
+            'perkaust_analytics': self.show_perkaust_analytics,
+            'perkaust_tutorials': self.show_perkaust_tutorials,
+            # כפתורי תמיכה
+            'contact_us': self.show_contact_us,
+            'quick_chat': self.show_quick_chat,
+            'tech_issue': self.show_tech_issue,
+            'general_advice': self.show_general_advice,
+            'open_ticket': self.show_open_ticket
         }
         
         action = button_actions.get(query.data)
