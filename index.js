@@ -5,7 +5,7 @@ const chrono = require('chrono-node');
 const SmartDeliveryParser = require('./smart-parser');
 
 // --- הגדרות ראשוניות ---
-const token = process.env.TELEGRAM_BOT_TOKEN || 'הכנס_כאן_את_הטוקן_החדש';
+const token = process.env.TELEGRAM_BOT_TOKEN || '7688500141:AAFs2USUgfxWygwb5YhTMShQ9l9q9oGFxR0';
 const bot = new TelegramBot(token, { polling: true });
 
 // --- הגדרת מסד הנתונים ---
