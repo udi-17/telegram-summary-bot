@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const chrono = require('chrono-node');
 
 // --- הגדרות ראשוניות ---
-const token = '7268100196:AAFYa_ejke6SRkhLRlF-HodxIyLW5xrk02E';
+const token = '7561110694:AAF4qMR0CWVpe7F2MnIeirHd6ZoHZ_tzBz8';
 const bot = new TelegramBot(token, { polling: true });
 
 // --- הגדרת מסד הנתונים ---
