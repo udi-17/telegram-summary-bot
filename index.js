@@ -236,6 +236,39 @@ bot.on('callback_query', (callbackQuery) => {
         };
         return;
     }
+
+    if (data.startsWith('confirm_delivery:')) {
+        const state = userState[chatId];
+        if (state && state.action === 'awaiting_delivery_confirmation') {
+            const parsed = state.parsedData;
+            
+            // אם חסר שם נמען, נבקש אותו
+            if (!parsed.recipient) {
+                bot.editMessageText('נא לציין את שם הנמען:', 
+                    { chat_id: chatId, message_id: msg.message_id });
+                userState[chatId] = {
+                    action: 'awaiting_recipient_for_parsed',
+                    parsedData: parsed
+                };
+                return;
+            }
+            
+            // שמירת השליחות
+            db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
+                [parsed.recipient, parsed.item || 'לא צוין', parsed.amount, parsed.destination || 'לא צוין', parsed.date.toISOString()], 
+                function(err) {
+                    if (err) {
+                        bot.editMessageText('אירעה שגיאה בשמירת הנתונים.', 
+                            { chat_id: chatId, message_id: msg.message_id });
+                        return console.error(err.message);
+                    }
+                    bot.editMessageText(`✅ השליחות נשמרה בהצלחה! (מספר #${this.lastID})`, 
+                        { chat_id: chatId, message_id: msg.message_id });
+                    delete userState[chatId];
+            });
+        }
+        return;
+    }
 });
 
 // --- טיפול בשגיאות ---
@@ -258,6 +291,43 @@ bot.on('message', (msg) => {
   const text = msg.text.replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '').trim();
   
   console.log(`Received message from chat ID ${chatId}: "${text}"`);
+  
+  // --- ניתוח חכם של הודעות שליחות ---
+  if (!text.startsWith('/') && !userState[chatId] && text.length > 10) {
+    const parsed = parseDeliveryMessage(text);
+    const identifiedParams = Object.values(parsed).filter(v => v !== null).length;
+    
+    // אם זוהו לפחות 3 פרמטרים כולל סכום
+    if (identifiedParams >= 3 && parsed.amount && (parsed.recipient || parsed.item)) {
+      const confirmKeyboard = {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ אישור ושמירה', callback_data: `confirm_delivery:${msg.message_id}` },
+            { text: '❌ ביטול', callback_data: 'cancel_action' }
+          ]]
+        }
+      };
+      
+      let summaryText = `🔍 *זוהתה שליחות חדשה:*\n\n`;
+      if (parsed.recipient) summaryText += `👤 *נמען:* ${parsed.recipient}\n`;
+      if (parsed.item) summaryText += `📦 *פריט:* ${parsed.item}\n`;
+      if (parsed.amount) summaryText += `💰 *סכום:* ${parsed.amount}₪\n`;
+      if (parsed.destination) summaryText += `📍 *יעד:* ${parsed.destination}\n`;
+      summaryText += `📅 *תאריך:* ${parsed.date.toLocaleDateString('he-IL')}\n`;
+      summaryText += `🕐 *שעה:* ${parsed.time}\n`;
+      
+      bot.sendMessage(chatId, summaryText + '\n\nהאם לשמור את השליחות?', 
+        { ...confirmKeyboard, parse_mode: 'Markdown' });
+      
+      // שמירת הנתונים המנותחים למצב זמני
+      userState[chatId] = {
+        action: 'awaiting_delivery_confirmation',
+        parsedData: parsed,
+        originalMessage: text
+      };
+      return;
+    }
+  }
   
   // --- טיפול במצב המשתמש (לשליחות חדשה) ---
   const state = userState[chatId];
@@ -294,6 +364,25 @@ bot.on('message', (msg) => {
     } else {
         bot.sendMessage(chatId, "הפורמט לא נכון. אנא שלח בפורמט: פריט סכום יעד (לדוגמה: אקמול 50 רעננה)", mainMenuKeyboard);
     }
+    return;
+  }
+  
+  // --- טיפול בהזנת שם נמען אחרי ניתוח חכם ---
+  if (state && state.action === 'awaiting_recipient_for_parsed') {
+    const parsed = state.parsedData;
+    parsed.recipient = text.trim();
+    
+    // שמירת השליחות
+    db.run(`INSERT INTO transactions (recipient, item, amount, destination, timestamp) VALUES (?, ?, ?, ?, ?)`, 
+      [parsed.recipient, parsed.item || 'לא צוין', parsed.amount, parsed.destination || 'לא צוין', parsed.date.toISOString()], 
+      function(err) {
+        if (err) {
+          bot.sendMessage(chatId, 'אירעה שגיאה בשמירת הנתונים.', mainMenuKeyboard);
+          return console.error(err.message);
+        }
+        bot.sendMessage(chatId, `✅ השליחות נשמרה בהצלחה! (מספר #${this.lastID})`, mainMenuKeyboard);
+    });
+    delete userState[chatId];
     return;
   }
   
@@ -1229,3 +1318,88 @@ function generateSummary(chatId, period, startDate, endDate, recipientName = nul
         bot.sendMessage(chatId, summaryText, summaryOptions);
     });
 } 
+
+// --- פונקציית ניתוח הודעות חכמה ---
+function parseDeliveryMessage(text) {
+    const result = {
+        recipient: null,
+        item: null,
+        amount: null,
+        destination: null,
+        date: null,
+        time: null,
+        notes: null
+    };
+    
+    // ניתוח תאריך ושעה עם chrono-node
+    const parsedDates = chrono.parse(text, new Date(), { forwardDate: false });
+    if (parsedDates.length > 0) {
+        const dateInfo = parsedDates[0];
+        result.date = dateInfo.start.date();
+        result.time = dateInfo.start.format('HH:mm');
+        // הסרת התאריך מהטקסט לניתוח המשך
+        text = text.replace(dateInfo.text, '').trim();
+    } else {
+        result.date = new Date();
+        result.time = new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    // זיהוי סכום - מחפש מספר עם או בלי ₪
+    const amountRegex = /(\d+(?:\.\d+)?)\s*(₪|ש"ח|שקל|שקלים)?/g;
+    const amountMatch = text.match(amountRegex);
+    if (amountMatch) {
+        // לוקח את המספר הראשון שנמצא כסכום
+        result.amount = parseFloat(amountMatch[0].match(/\d+(?:\.\d+)?/)[0]);
+        text = text.replace(amountMatch[0], '').trim();
+    }
+    
+    // זיהוי יעד - מילים שמציינות מיקום
+    const locationKeywords = ['ל', 'אל', 'ליעד', 'יעד', 'למקום', 'לכתובת', 'בכתובת'];
+    let destinationFound = false;
+    
+    for (const keyword of locationKeywords) {
+        const regex = new RegExp(`${keyword}\\s+([^,\\.\\n]+)`, 'i');
+        const match = text.match(regex);
+        if (match) {
+            result.destination = match[1].trim();
+            text = text.replace(match[0], '').trim();
+            destinationFound = true;
+            break;
+        }
+    }
+    
+    // אם לא נמצא יעד עם מילת מפתח, נחפש שמות ערים ידועים
+    if (!destinationFound) {
+        const cities = ['תל אביב', 'ירושלים', 'חיפה', 'רעננה', 'הרצליה', 'רמת גן', 'פתח תקווה', 'ראשון לציון', 'אשדוד', 'באר שבע'];
+        for (const city of cities) {
+            if (text.includes(city)) {
+                result.destination = city;
+                text = text.replace(city, '').trim();
+                break;
+            }
+        }
+    }
+    
+    // זיהוי שם - מילים שמציינות שם
+    const nameKeywords = ['עבור', 'לשם', 'ללקוח', 'לאיש קשר', 'ל'];
+    for (const keyword of nameKeywords) {
+        const regex = new RegExp(`${keyword}\\s+([א-ת\\s]+)`, 'i');
+        const match = text.match(regex);
+        if (match) {
+            result.recipient = match[1].trim();
+            text = text.replace(match[0], '').trim();
+            break;
+        }
+    }
+    
+    // מה שנשאר זה כנראה תיאור הפריט
+    const remainingWords = text.split(/\s+/).filter(word => word.length > 0);
+    if (remainingWords.length > 0) {
+        result.item = remainingWords.join(' ');
+    }
+    
+    return result;
+}
+
+
+
