@@ -1,0 +1,26 @@
+{
+  "name": "whatsapp-pizza-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "pizza",
+    "ordering",
+    "hebrew"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "WhatsApp bot for pizza ordering system in Hebrew",
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.31.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
