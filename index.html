@@ -3,225 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>חנות המכירות המובחרת - הצעות מיוחדות</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>🍕 ניהול בוט הפיצריה</title>
     <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <div class="nav-wrapper">
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
                 <div class="logo">
-                    <i class="fas fa-shopping-bag"></i>
-                    <h1>חנות המכירות</h1>
+                    <i class="fas fa-pizza-slice"></i>
+                    <h1>בוט הפיצריה</h1>
                 </div>
-                <nav class="nav">
-                    <a href="#home" class="nav-link">בית</a>
-                    <a href="#products" class="nav-link">מוצרים</a>
-                    <a href="#deals" class="nav-link">מבצעים</a>
-                    <a href="#about" class="nav-link">אודות</a>
-                    <a href="#contact" class="nav-link">צור קשר</a>
-                </nav>
-                <div class="header-actions">
-                    <button class="cart-btn">
+                <div class="status-indicator">
+                    <div class="status-dot online"></div>
+                    <span>מחובר</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <a href="#dashboard" class="nav-item active" data-section="dashboard">
+                        <i class="fas fa-chart-line"></i>
+                        <span>דשבורד</span>
+                    </a>
+                    <a href="#orders" class="nav-item" data-section="orders">
                         <i class="fas fa-shopping-cart"></i>
-                        <span class="cart-count">0</span>
-                    </button>
-                    <button class="menu-toggle">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </header>
+                        <span>הזמנות</span>
+                    </a>
+                    <a href="#products" class="nav-item" data-section="products">
+                        <i class="fas fa-utensils"></i>
+                        <span>מוצרים</span>
+                    </a>
+                    <a href="#customers" class="nav-item" data-section="customers">
+                        <i class="fas fa-users"></i>
+                        <span>לקוחות</span>
+                    </a>
+                    <a href="#analytics" class="nav-item" data-section="analytics">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>ניתוחים</span>
+                    </a>
+                    <a href="#settings" class="nav-item" data-section="settings">
+                        <i class="fas fa-cog"></i>
+                        <span>הגדרות</span>
+                    </a>
+                </nav>
+            </aside>
 
-    <!-- Hero Section -->
-    <section id="home" class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <h2 class="hero-title">הצעות מיוחדות שלא תרצו לפספס!</h2>
-                <p class="hero-subtitle">מבצעים חמים, מחירים בלעדיים ומגוון רחב של מוצרים איכותיים</p>
-                <div class="hero-buttons">
-                    <a href="#products" class="btn btn-primary">רכישה עכשיו</a>
-                    <a href="#deals" class="btn btn-secondary">הצעות מיוחדות</a>
-                </div>
-            </div>
-            <div class="hero-image">
-                <div class="hero-image-placeholder">
-                    <i class="fas fa-shopping-cart"></i>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Features Section -->
-    <section class="features">
-        <div class="container">
-            <div class="features-grid">
-                <div class="feature-card">
-                    <i class="fas fa-truck"></i>
-                    <h3>משלוח חינם</h3>
-                    <p>משלוח חינם לכל רחבי הארץ בקניות מעל ₪200</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-shield-alt"></i>
-                    <h3>אחריות מלאה</h3>
-                    <p>אחריות מלאה על כל המוצרים עד 2 שנים</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-headset"></i>
-                    <h3>תמיכה 24/7</h3>
-                    <p>שירות לקוחות מקצועי זמין 24 שעות ביממה</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-undo"></i>
-                    <h3>החזרה קלה</h3>
-                    <p>החזרת מוצרים קלה ונוחה עד 30 יום</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Products Section -->
-    <section id="products" class="products">
-        <div class="container">
-            <div class="section-header">
-                <h2>המוצרים שלנו</h2>
-                <p>מגוון רחב של מוצרים איכותיים במחירים מיוחדים</p>
-            </div>
-            <div class="products-grid" id="products-grid">
-                <!-- Products will be dynamically loaded here -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Deals Section -->
-    <section id="deals" class="deals">
-        <div class="container">
-            <div class="section-header">
-                <h2>מבצעים חמים</h2>
-                <p>הצעות מיוחדות למשך זמן محدود</p>
-            </div>
-            <div class="deals-grid">
-                <div class="deal-card featured">
-                    <div class="deal-badge">מבצע השבוע</div>
-                    <div class="deal-content">
-                        <h3>מבצע קיץ גדול</h3>
-                        <p>עד 70% הנחה על מוצרי אלקטרוניקה</p>
-                        <div class="deal-price">
-                            <span class="old-price">₪999</span>
-                            <span class="new-price">₪299</span>
-                        </div>
-                        <button class="btn btn-primary">רכישה עכשיו</button>
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Dashboard Section -->
+                <section id="dashboard" class="content-section active">
+                    <div class="section-header">
+                        <h2>דשבורד</h2>
+                        <p>מבט כללי על פעילות הפיצריה</p>
                     </div>
-                </div>
-                <div class="deal-card">
-                    <div class="deal-badge">חדש</div>
-                    <div class="deal-content">
-                        <h3>מוצרי בית</h3>
-                        <p>הנחה של 50% על כל מוצרי הבית</p>
-                        <div class="deal-price">
-                            <span class="old-price">₪500</span>
-                            <span class="new-price">₪250</span>
-                        </div>
-                        <button class="btn btn-secondary">רכישה עכשיו</button>
-                    </div>
-                </div>
-                <div class="deal-card">
-                    <div class="deal-badge">מוגבל</div>
-                    <div class="deal-content">
-                        <h3>אביזרי מחשב</h3>
-                        <p>מוצרי מחשב באיכות גבוהה</p>
-                        <div class="deal-price">
-                            <span class="old-price">₪800</span>
-                            <span class="new-price">₪400</span>
-                        </div>
-                        <button class="btn btn-secondary">רכישה עכשיו</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
 
-    <!-- Newsletter Section -->
-    <section class="newsletter">
-        <div class="container">
-            <div class="newsletter-content">
-                <h2>הישארו מעודכנים</h2>
-                <p>קבלו הצעות מיוחדות וחדשות ישירות למייל</p>
-                <form class="newsletter-form">
-                    <input type="email" placeholder="הכניסו כתובת מייל" required>
-                    <button type="submit" class="btn btn-primary">הרשמה</button>
+                    <!-- Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-orders">0</h3>
+                                <p>הזמנות היום</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-shekel-sign"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-revenue">₪0</h3>
+                                <p>הכנסות היום</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="total-customers">0</h3>
+                                <p>לקוחות חדשים</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="avg-delivery">0 דק'</h3>
+                                <p>זמן משלוח ממוצע</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Orders -->
+                    <div class="recent-orders">
+                        <div class="section-header">
+                            <h3>הזמנות אחרונות</h3>
+                            <a href="#orders" class="view-all">צפה בכל ההזמנות</a>
+                        </div>
+                        <div class="orders-list" id="recent-orders-list">
+                            <!-- Orders will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Orders Section -->
+                <section id="orders" class="content-section">
+                    <div class="section-header">
+                        <h2>ניהול הזמנות</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-primary" onclick="refreshOrders()">
+                                <i class="fas fa-sync-alt"></i>
+                                רענן
+                            </button>
+                            <select id="order-filter" class="filter-select">
+                                <option value="all">כל ההזמנות</option>
+                                <option value="pending">ממתינות</option>
+                                <option value="preparing">בהכנה</option>
+                                <option value="delivering">במשלוח</option>
+                                <option value="completed">הושלמו</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="orders-container">
+                        <div class="orders-list" id="orders-list">
+                            <!-- Orders will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Products Section -->
+                <section id="products" class="content-section">
+                    <div class="section-header">
+                        <h2>ניהול מוצרים</h2>
+                        <button class="btn btn-primary" onclick="showAddProductModal()">
+                            <i class="fas fa-plus"></i>
+                            הוסף מוצר
+                        </button>
+                    </div>
+
+                    <div class="products-grid" id="products-grid">
+                        <!-- Products will be loaded here -->
+                    </div>
+                </section>
+
+                <!-- Customers Section -->
+                <section id="customers" class="content-section">
+                    <div class="section-header">
+                        <h2>ניהול לקוחות</h2>
+                    </div>
+
+                    <div class="customers-container">
+                        <div class="customers-list" id="customers-list">
+                            <!-- Customers will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Analytics Section -->
+                <section id="analytics" class="content-section">
+                    <div class="section-header">
+                        <h2>ניתוחים וסטטיסטיקות</h2>
+                    </div>
+
+                    <div class="analytics-grid">
+                        <div class="chart-container">
+                            <h3>מכירות יומיות</h3>
+                            <canvas id="sales-chart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>מוצרים פופולריים</h3>
+                            <canvas id="products-chart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Section -->
+                <section id="settings" class="content-section">
+                    <div class="section-header">
+                        <h2>הגדרות</h2>
+                    </div>
+
+                    <div class="settings-container">
+                        <div class="setting-group">
+                            <h3>הגדרות כלליות</h3>
+                            <div class="setting-item">
+                                <label>שם הפיצריה</label>
+                                <input type="text" id="restaurant-name" value="הפיצריה שלנו">
+                            </div>
+                            <div class="setting-item">
+                                <label>מספר טלפון</label>
+                                <input type="tel" id="restaurant-phone" value="03-1234567">
+                            </div>
+                            <div class="setting-item">
+                                <label>כתובת</label>
+                                <input type="text" id="restaurant-address" value="רחוב הרצל 123, תל אביב">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h3>הגדרות משלוח</h3>
+                            <div class="setting-item">
+                                <label>זמן משלוח ממוצע (דקות)</label>
+                                <input type="number" id="delivery-time" value="30">
+                            </div>
+                            <div class="setting-item">
+                                <label>עלות משלוח</label>
+                                <input type="number" id="delivery-cost" value="15">
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <h3>הגדרות בוט</h3>
+                            <div class="setting-item">
+                                <label>הודעת פתיחה</label>
+                                <textarea id="welcome-message" rows="3">ברוכים הבאים לפיצריה שלנו! איך אוכל לעזור לכם היום?</textarea>
+                            </div>
+                            <div class="setting-item">
+                                <label>הודעת סיום הזמנה</label>
+                                <textarea id="order-complete-message" rows="3">תודה על ההזמנה! הפיצה שלכם בדרך אליכם.</textarea>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary" onclick="saveSettings()">
+                            <i class="fas fa-save"></i>
+                            שמור הגדרות
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Product Modal -->
+    <div id="add-product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>הוסף מוצר חדש</h3>
+                <button class="close-btn" onclick="closeModal('add-product-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="add-product-form">
+                    <div class="form-group">
+                        <label>שם המוצר</label>
+                        <input type="text" id="product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>תיאור</label>
+                        <textarea id="product-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>מחיר (₪)</label>
+                            <input type="number" id="product-price" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>קטגוריה</label>
+                            <select id="product-category" required>
+                                <option value="pizza">פיצה</option>
+                                <option value="drinks">משקאות</option>
+                                <option value="sides">תוספות</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>URL תמונה (אופציונלי)</label>
+                        <input type="url" id="product-image">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('add-product-modal')">ביטול</button>
+                        <button type="submit" class="btn btn-primary">הוסף מוצר</button>
+                    </div>
                 </form>
             </div>
         </div>
-    </section>
+    </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h3>חנות המכירות</h3>
-                    <p>החנות המובחרת למוצרים איכותיים במחירים מיוחדים</p>
-                    <div class="social-links">
-                        <a href="#"><i class="fab fa-facebook"></i></a>
-                        <a href="#"><i class="fab fa-instagram"></i></a>
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#"><i class="fab fa-youtube"></i></a>
-                    </div>
-                </div>
-                <div class="footer-section">
-                    <h4>קישורים מהירים</h4>
-                    <ul>
-                        <li><a href="#home">בית</a></li>
-                        <li><a href="#products">מוצרים</a></li>
-                        <li><a href="#deals">מבצעים</a></li>
-                        <li><a href="#about">אודות</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>שירות לקוחות</h4>
-                    <ul>
-                        <li><a href="#">צור קשר</a></li>
-                        <li><a href="#">תנאי השימוש</a></li>
-                        <li><a href="#">מדיניות פרטיות</a></li>
-                        <li><a href="#">החזרות</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>צור קשר</h4>
-                    <div class="contact-info">
-                        <p><i class="fas fa-phone"></i> 050-123-4567</p>
-                        <p><i class="fas fa-envelope"></i> info@salesstore.co.il</p>
-                        <p><i class="fas fa-map-marker-alt"></i> תל אביב, ישראל</p>
-                    </div>
-                </div>
+    <!-- Order Details Modal -->
+    <div id="order-details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>פרטי הזמנה</h3>
+                <button class="close-btn" onclick="closeModal('order-details-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; 2024 חנות המכירות. כל הזכויות שמורות.</p>
-            </div>
-        </div>
-    </footer>
-
-    <!-- Cart Modal -->
-    <div class="cart-modal" id="cart-modal">
-        <div class="cart-modal-content">
-            <div class="cart-modal-header">
-                <h3>עגלת קניות</h3>
-                <button class="close-cart">&times;</button>
-            </div>
-            <div class="cart-modal-body" id="cart-items">
-                <p class="empty-cart">העגלה שלכם ריקה</p>
-            </div>
-            <div class="cart-modal-footer">
-                <div class="cart-total">
-                    <strong>סה"כ: ₪<span id="cart-total">0</span></strong>
-                </div>
-                <button class="btn btn-primary checkout-btn">מעבר לתשלום</button>
+            <div class="modal-body" id="order-details-content">
+                <!-- Order details will be loaded here -->
             </div>
         </div>
     </div>
