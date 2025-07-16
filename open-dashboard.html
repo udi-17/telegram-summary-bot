@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פתיחת ממשק בוט הפיצריה</title>
+    <style>
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+        }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+            transition: transform 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .status {
+            background: #e8f5e8;
+            color: #2d5a2d;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .qr-info {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🍕</div>
+        <h1>בוט הפיצריה שלך מוכן!</h1>
+        <p>הממשק הניהול זמין ופועל</p>
+        
+        <div class="status">
+            ✅ השרת פועל בכתובת: http://localhost:3000
+        </div>
+        
+        <div class="qr-info">
+            📱 QR Code מוצג בטרמינל - סרוק אותו עם וואטסאפ שלך
+        </div>
+        
+        <a href="http://localhost:3000" target="_blank" class="btn">
+            🖥️ פתח ממשק ניהול
+        </a>
+        
+        <a href="#" onclick="window.open('http://localhost:3000', '_blank')" class="btn">
+            📊 דשבורד ניהול
+        </a>
+        
+        <div style="margin-top: 30px; font-size: 14px; color: #888;">
+            <p><strong>פקודות וואטסאפ זמינות:</strong></p>
+            <p>• תפריט - לראות את כל המוצרים</p>
+            <p>• עגלה - לראות את העגלה שלך</p>
+            <p>• הזמן - להזמין את העגלה</p>
+            <p>• סטטוס - לראות סטטוס הזמנות</p>
+        </div>
+    </div>
+    
+    <script>
+        // פתיחת הממשק אוטומטית
+        setTimeout(() => {
+            window.open('http://localhost:3000', '_blank');
+        }, 2000);
+    </script>
+</body>
+</html>
