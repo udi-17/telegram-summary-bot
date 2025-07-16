@@ -1,27 +1,30 @@
 {
-  "name": "telegram-summary-bot",
+  "name": "whatsapp-pizza-bot",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "whatsapp-bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js",
+    "start": "node whatsapp-bot.js",
+    "dev": "nodemon whatsapp-bot.js",
     "server": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "telegram",
+    "whatsapp",
     "bot",
-    "summary",
-    "hebrew",
-    "ai"
+    "pizza",
+    "restaurant",
+    "hebrew"
   ],
   "author": "",
   "license": "ISC",
-  "description": "בוט Telegram חכם ליצירת סיכומים אוטומטיים עם ממשק ניהול מתקדם",
+  "description": "בוט וואטסאפ חכם למכירת מוצרי פיצריה עם ממשק ניהול מתקדם",
   "dependencies": {
     "dotenv": "^17.2.0",
     "express": "^4.18.2",
-    "node-telegram-bot-api": "^0.66.0"
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "sqlite3": "^5.1.6",
+    "moment": "^2.29.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
